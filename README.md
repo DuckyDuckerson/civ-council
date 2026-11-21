@@ -15,6 +15,9 @@ up on you, and lie to each other.
   own AI still moves the units.
 - **Group chats with teeth**: group pacts everyone must sign, joint war declarations, votes to kick a member,
   and a shared goal.
+- **Your own advisor**: a Claude that works for you. Ask it anything in the Advisor channel, and at the start
+  of each turn it gives its own picks (research, civic, what each city should build, diplomacy) next to Civ's
+  own recommendations. It knows only what you know.
 - **History page**: a timelapse of the whole game, with who trusts whom on every turn and what happened when.
 - **Spy and Minds** (optional cheats): read the leaders' private messages to each other and their private
   reasoning.
@@ -114,6 +117,7 @@ python3 -m civ_council.web --provider claude-code --model haiku   # Claude leade
 | `--strategy-model opus` | The model for each leader's long-term grand strategy (default `opus`; `none` turns grand strategies off). |
 | `--deep-strategy-every 50` | Opus writes a strategy this often; Sonnet writes the rewrites in between. |
 | `--leader-models gandhi=sonnet` | A different model for one leader. |
+| `--advisor-model sonnet` | The model for your own advisor (default: the talk model; `none` turns the advisor off). |
 | `--spy` | Start with the Spy channel on (you can switch it on in the browser too). |
 | `--voice roleplay` | Leaders talk like historical figures instead of the default casual chat. |
 | `--summarize-after 70` | A leader condenses its memory after this many new messages and notes. |
@@ -123,7 +127,8 @@ python3 -m civ_council.web --provider claude-code --model haiku   # Claude leade
 
 Every leader decision is one Claude Code call that counts against your Claude plan's usage limits (the same
 5-hour and weekly limits as your normal Claude use). Roughly: one Haiku call per leader per turn, Sonnet when
-you talk with them, and an occasional Opus call for grand strategy. Expect somewhere around 8-10 calls a turn
+you talk with them, one Sonnet call a turn for your advisor's picks, and an occasional Opus call for grand
+strategy. Expect somewhere around 8-10 calls a turn
 with six AI civs, more when you chat a lot. On a subscription you pay nothing extra; it just uses your limits.
 The ⏱ meter in the browser shows what your game has used, with the equivalent API price.
 

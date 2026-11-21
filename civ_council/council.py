@@ -18,6 +18,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from .advisor import ADVISOR, picks_text
 from .agent import Decision, LeaderAgent
 from .game import PROPOSAL_ACTIONS, ActionResult, Civ, Game, deal_terms, proposal_label, side_text
 from .memory import LeaderMemory
@@ -124,6 +125,7 @@ class Council:
     groups: dict[str, dict] = field(default_factory=dict)   # "g1" -> {id, name, members, member_names}
     memory_dir: Path | None = None   # if set, memories (and game state) are saved here after every turn
     parallel: int = 1                # leaders thinking at once on a turn (each is a slow LLM call)
+    _save_lock: threading.RLock = field(default_factory=threading.RLock)
     _mail_lock: threading.RLock = field(default_factory=threading.RLock)   # inboxes: web thread + worker
     review_every: int = 5            # real game: each leader reviews its empire at least this often (0 = never)
     _last_review: dict[int, int] = field(default_factory=dict)
@@ -132,6 +134,10 @@ class Council:
     strategy_every: int = 25         # grand strategies are rewritten at least this often when the era isn't known
                                      # (0 = never); in a real game the gap comes from the leader's era
     usage: list[dict] = field(default_factory=list)   # every model call: turn, leader, model, purpose, seconds, tokens
+    advisor: object | None = None   # your own Claude advisor (advisor.Advisor): the Advisor channel and its picks
+    advisor_on: bool = True         # the browser's switch: off = no picks, no answers, no usage
+    llm_factory: object | None = None   # model name -> a new client (set by the builder), for switching models live
+    models: dict = field(default_factory=dict)   # models chosen in the browser's Settings (saved per game)
     history: list[dict] = field(default_factory=list)   # [{turn, kind, text, civs}]: wars, deals, pacts... (History page)
     usage_archived: dict = field(default_factory=dict)   # totals of calls too old to keep one by one
     _replan: dict[int, str] = field(default_factory=dict)   # leader -> why it asked for a new strategy
@@ -466,6 +472,95 @@ class Council:
         self._group_note(g, f"{self._group_name(actor).capitalize()} added {self._group_name(t)} to the group chat.",
                          sender=None if actor == self.human_id else actor)
         return ActionResult(True, f"added {self._group_name(t)} to {g['id']}")
+
+    # ---- your advisor -----------------------------------------------------------------
+    def ask_advisor(self, text: str) -> bool:
+        """Your question goes into the Advisor channel at once; the answer comes from advisor_reply (slow)."""
+        if self.advisor is None or not self.advisor_on or not str(text or "").strip():
+            return False
+        self._record(ADVISOR, "message", str(text).strip()[:1500], sender=self.human_id)
+        return True
+
+    def advisor_reply(self) -> None:
+        self.status = "Your advisor is thinking…"
+        try:
+            text = self.advisor.answer(self)
+        except Exception as e:   # a failed call shouldn't break the chat
+            text = f"(Your advisor couldn't answer just now: {e})"
+        finally:
+            self.status = ""
+        self._record(ADVISOR, "message", text, f"🧭 Advisor: {text}", advisor=True)
+
+    def advisor_picks(self) -> dict | None:
+        """The advisor's recommendations for this turn, next to Civ's own: in the Advisor channel and in Civ."""
+        if self.advisor is None or not self.advisor_on:
+            return None
+        self.status = "Your advisor is looking over your empire…"
+        try:
+            picks = self.advisor.picks(self)
+        except Exception:
+            picks = None
+        finally:
+            self.status = ""
+        if not picks:
+            return None
+        line = picks_text(picks)
+        self._record(ADVISOR, "picks", picks.get("headline") or line, f"🧭 Advisor's picks: {line}",
+                     advisor=True, picks=picks)
+        notify = getattr(self.game, "notify", None)
+        if notify is not None and self.civ_notify and line:
+            try:
+                notify(self.human_id, "Your advisor (Civ Council)", (picks.get("headline", "") + " " + line).strip()[:300])
+            except Exception:
+                pass
+        return picks
+
+    # ---- models (the browser's Settings) ------------------------------------------------
+    MODEL_JOBS = ("turn", "talk", "strategy", "advisor")
+    MODEL_CHOICES = ("haiku", "sonnet", "opus")
+    TIMEOUTS = {"talk": 45, "advisor": 120}   # you're waiting on these; past that, the fallback answers
+
+    @staticmethod
+    def _model_of(client) -> str | None:
+        if client is None:
+            return None
+        return getattr(client, "model", None) or str(getattr(client, "name", "")).split(":")[-1] or None
+
+    def model_settings(self) -> dict:
+        """What each job runs on now, and whether the browser may change it (Claude Code only)."""
+        first = next(iter(self.agents.values()), None)
+        return {
+            "editable": self.llm_factory is not None,
+            "choices": list(self.MODEL_CHOICES),
+            "turn": self._model_of(first.client) if first else None,
+            "talk": self._model_of((first.talk_client or first.client)) if first else None,
+            "strategy": (self._model_of(first.strategy_client) or "off") if first else "off",
+            "advisor": self._model_of(self.advisor.client) if self.advisor else None,
+            "advisor_on": bool(self.advisor is not None and self.advisor_on),
+            "has_advisor": self.advisor is not None,
+        }
+
+    def set_models(self, **jobs) -> str:
+        """Switch models live: turn (routine turns), talk (with you, and memory summaries), strategy (grand
+        strategies, or "off"), advisor. Each leader gets its own new client. Returns "" or what's wrong."""
+        if self.llm_factory is None:
+            return "models can only be changed with Claude Code"
+        jobs = {k: str(v).strip().lower() for k, v in jobs.items() if k in self.MODEL_JOBS and v}
+        for k, v in jobs.items():
+            if v not in self.MODEL_CHOICES and not (k == "strategy" and v == "off"):
+                return f"unknown model {v!r} for {k}"
+        make = self.llm_factory
+        for agent in self.agents.values():
+            if "turn" in jobs:
+                agent.client = make(jobs["turn"], None)
+            if "talk" in jobs:
+                agent.talk_client = make(jobs["talk"], self.TIMEOUTS["talk"])
+            if "strategy" in jobs:
+                agent.strategy_client = None if jobs["strategy"] == "off" else make(jobs["strategy"], None)
+        if "advisor" in jobs and self.advisor is not None:
+            self.advisor.client = make(jobs["advisor"], self.TIMEOUTS["advisor"])
+        self.models.update(jobs)
+        return ""
 
     # ---- lookups -------------------------------------------------------------
     def resolve(self, who: str | int) -> int | str | None:
@@ -1200,6 +1295,7 @@ class Council:
         self._record(WORLD, "turn", f"Turn {self.game.turn} begins", f"— Turn {self.game.turn} begins —")
         self._tick_pacts()
         self._world_news(events)
+        self.advisor_picks()
         return self.feed[start:]
 
     def on_new_turn(self) -> list[str]:
@@ -1246,6 +1342,7 @@ class Council:
         self._settle_replies()
         self._pair_count.clear()
         self.consolidate(self._summaries_due())
+        self.advisor_picks()
         self.turn_seconds[self.game.turn] = round(time.time() - began, 1)   # before saving, so it's kept
         if self.memory_dir:
             self.save_memories(self.memory_dir)
@@ -1341,6 +1438,10 @@ class Council:
         return self._add_usage(json.loads(json.dumps(self.usage_archived)), list(self.usage))
 
     def save_memories(self, folder: Path) -> None:
+        with self._save_lock:   # the worker's autosave and a Ctrl+C save must not write the same files at once
+            self._save_memories(folder)
+
+    def _save_memories(self, folder: Path) -> None:
         for agent in self.agents.values():
             agent.memory.save(folder / f"{agent.persona.key}.json")
         save_state = getattr(self.game, "save_state", None)
@@ -1353,7 +1454,8 @@ class Council:
                                                        "turn_seconds": {str(k): v for k, v in self.turn_seconds.items()}}))
         folder.mkdir(parents=True, exist_ok=True)
         (folder / "personas.json").write_text(json.dumps(self.personas))
-        (folder / "prefs.json").write_text(json.dumps({"civ_notify": self.civ_notify,
+        (folder / "prefs.json").write_text(json.dumps({"civ_notify": self.civ_notify, "advisor_on": self.advisor_on,
+                                                       "models": self.models,
                                                        "quiet_civ_ai": getattr(self.game, "quiet_ai", None),
                                                        "block_civ_screen": getattr(self.game, "block_screen", None)}))
         folder.mkdir(parents=True, exist_ok=True)   # your chats and group chats survive a restart
@@ -1474,6 +1576,9 @@ class Council:
         try:
             prefs = json.loads((folder / "prefs.json").read_text())
             self.civ_notify = bool(prefs.get("civ_notify", True))
+            self.advisor_on = bool(prefs.get("advisor_on", True))
+            if prefs.get("models") and self.llm_factory is not None:   # what you picked in Settings last time
+                self.set_models(**prefs["models"])
             if prefs.get("quiet_civ_ai") is not None and hasattr(self.game, "quiet_ai"):
                 self.game.quiet_ai = bool(prefs["quiet_civ_ai"])
             if prefs.get("block_civ_screen") is not None and hasattr(self.game, "block_screen"):
@@ -1493,6 +1598,9 @@ class Council:
             self.entries = [e for e in data.get("entries", []) if isinstance(e, dict) and "id" in e]
             self.groups = {str(k): v for k, v in data.get("groups", {}).items()} or self.groups
             self._load_history(folder)
+            if self.advisor is not None:   # it remembers what it last recommended
+                last = next((e for e in reversed(self.entries) if e.get("channel") == ADVISOR and e.get("picks")), None)
+                self.advisor.last_picks = last["picks"] if last else None
             self._sync_groups()   # the leaders are back in their group chats too
             if self.entries:
                 self._ids = itertools.count(max(e["id"] for e in self.entries) + 1)

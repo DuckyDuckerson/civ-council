@@ -139,6 +139,12 @@
   .quietbtn { margin-left: auto; }
   .diplo { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px;
            max-height: 46vh; overflow-y: auto; padding-top: 4px; }
+  .card.picks .ni b { color: var(--gold); font-weight: 600; }
+  .card.picks .ni.warn { color: var(--warn); }
+  .srow { display: flex; align-items: center; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); }
+  .srow > div { flex: 1; min-width: 0; }
+  .srow .slabel { font-weight: 600; }
+  .srow select { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font: inherit; }
   .gbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
   .ggoal { width: 100%; color: var(--gold); font-size: 13px; }
   .grow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 0; }
@@ -217,6 +223,7 @@
     <div class="status" id="status"></div>
     <button class="hbtn hot" id="offersBtn" hidden title="Offers waiting for your answer">📜 <span id="offersN">0</span></button>
     <button class="hbtn" id="usageBtn" hidden title="How long the leaders took and how much Claude they used">⏱ <span id="usageN"></span></button>
+    <button class="hbtn" id="settingsBtn" title="Settings: which models do what, and your advisor's switch">⚙️</button>
     <button class="hbtn" id="prefsBtn" title="Notifications and sound">🔔</button>
     <a class="hbtn" id="historyBtn" href="/history" title="The story of the game so far: what happened each turn and how everyone's trust changed, with a timelapse">⏳<span class="spylabel"> History</span></a>
     <button class="hbtn" id="spyBtn" title="Read the leaders' private messages to each other">🕵️<span class="spylabel"> Spy</span></button>
@@ -237,6 +244,7 @@
 </div>
 <div class="pop" id="offers" hidden></div>
 <div class="pop" id="usage" hidden></div>
+<div class="pop" id="settings" hidden></div>
 <div class="pop" id="prefs" hidden>
   <h3>Notifications</h3>
   <label class="pref"><input type="checkbox" id="prefNotify"> Pop-up notifications when a leader writes to you or sends an offer</label>
@@ -359,6 +367,7 @@ async function poll() {
 
 // ---- notifications --------------------------------------------------------------
 function forMe(e, st) {
+  if (e.advisor) return e.kind === "message" || e.kind === "picks";
   if (e.sender === st.me.id || e.sender == null) return false;
   const ch = key(e.channel);
   if (ch === "spy" || ch === "minds" || e.secret) return false;
@@ -534,12 +543,53 @@ function setupPrefs() {
   $("prefBlock").onchange = () => api("/api/prefs", { block_civ_screen: $("prefBlock").checked });
   renderPrefsBtn();
 }
+// ---- Settings: which model does what, and the advisor's switch ----------------------------
+const JOBS = [
+  ["turn", "Leaders' turns", "Every leader, every turn: most of your usage. Haiku keeps it light."],
+  ["talk", "Talking with you", "When you're in the conversation, and the leaders' memory summaries."],
+  ["strategy", "Grand strategy", "Each leader's long-term plan, written now and then. Off saves the most."],
+  ["advisor", "Your advisor", "Its picks each turn and its answers to you."],
+];
+function renderSettings() {
+  const pop = $("settings"), st = S.state.settings || {};
+  pop.innerHTML = "";
+  pop.append(el("h3", null, "Settings"));
+  const note = el("div", "hint");
+  const saved = (r) => { note.textContent = r && r.ok === false ? (r.error || "Couldn't change that.") : "Saved: applies from the next call."; };
+  // the advisor's switch
+  const adv = el("label", "pref");
+  const cb = el("input"); cb.type = "checkbox"; cb.checked = !!st.advisor_on; cb.disabled = !st.has_advisor;
+  adv.append(cb, el("span", null, st.has_advisor ? "Advisor on: picks at the start of each turn, and answers to your questions"
+                                                  : "No advisor (Civ Council was started with --advisor-model none)"));
+  cb.onchange = async () => { saved(await api("/api/settings", { advisor_on: cb.checked })); };
+  pop.append(adv, el("div", "hint", "Off uses nothing: no picks and no answers until you turn it back on."));
+  // models
+  pop.append(el("h3", null, "Models"));
+  if (!st.editable) {
+    pop.append(el("div", "hint", "Models are set when Civ Council starts. Switching them here works with Claude Code (--provider claude-code)."));
+  }
+  for (const [job, label, help] of JOBS) {
+    if (job === "advisor" && !st.has_advisor) continue;
+    const row = el("div", "srow");
+    const left = el("div"); left.append(el("div", "slabel", label), el("div", "hint", help));
+    const sel = el("select"); sel.disabled = !st.editable;
+    for (const m of [...(st.choices || []), ...(job === "strategy" ? ["off"] : [])])
+      sel.append(new Option(m === "off" ? "Off" : m[0].toUpperCase() + m.slice(1), m));
+    if (st[job] && ![...sel.options].some((o) => o.value === st[job])) sel.append(new Option(st[job], st[job]));
+    sel.value = st[job] || "";
+    sel.onchange = async () => { saved(await api("/api/settings", { [job]: sel.value })); };
+    row.append(left, sel); pop.append(row);
+  }
+  pop.append(el("div", "hint", "Haiku is the lightest on your usage, Sonnet sits in the middle, Opus is the heaviest. Saved with this game."), note);
+}
+
 function renderPrefsBtn() { $("prefsBtn").textContent = P.notify || P.sound ? "🔔" : "🔕"; }
 function togglePop(id) {
-  for (const other of ["offers", "prefs", "usage"]) if (other !== id) $(other).hidden = true;
+  for (const other of ["offers", "prefs", "usage", "settings"]) if (other !== id) $(other).hidden = true;
   $(id).hidden = !$(id).hidden;
   if (id === "offers" && !$(id).hidden) renderOffers();
   if (id === "usage" && !$(id).hidden) renderUsage();
+  if (id === "settings" && !$(id).hidden) renderSettings();
   if (id === "prefs" && !$(id).hidden) renderVoices();
 }
 const secs = (s) => s == null ? "–" : s >= 90 ? `${Math.floor(s / 60)}m ${Math.round(s % 60)}s` : `${Math.round(s)}s`;
@@ -669,7 +719,7 @@ function render(newStuff) {
   const g0 = groupById(S.chan);
   $("composer").style.display = S.chan === "spy" || S.chan === "minds" || S.chan === "new" || S.chan === "news"
     || (g0 && !inGroup(g0)) ? "none" : "";
-  $("input").placeholder = S.chan === "world" ? "Speak to every leader…"
+  $("input").placeholder = S.chan === "advisor" ? (S.state.settings && !S.state.settings.advisor_on ? "Your advisor is off (⚙️ Settings)" : "Ask your advisor anything…") : S.chan === "world" ? "Speak to every leader…"
     : groupById(S.chan) ? "Write to the group…" : "Write a private message…";
   renderSide();
   renderHead();
@@ -710,6 +760,7 @@ function renderSide() {
   side.append(el("div", "group", "Channels"));
   side.append(chanButton("world", el("div", "icon", "🌍"), "World", el("span", "sub", "Everyone hears this")));
   side.append(chanButton("news", el("div", "icon", "📰"), "World News", el("span", "sub", "What happened each turn")));
+  if (S.state.advisor) side.append(chanButton("advisor", el("div", "icon", "🧭"), "Advisor", el("span", "sub", "Your own counsel")));
   if (S.state.spy) {   // cheats: only with Spy turned on
     side.append(chanButton("spy", el("div", "icon", "🕵️"), "Spy", el("span", "sub", "Their private messages")));
     side.append(chanButton("minds", el("div", "icon", "🧠"), "Minds", el("span", "sub", "What each leader is thinking")));
@@ -825,6 +876,25 @@ function drawHead(h) {
       if (grp.goal_text && S.groupInfo !== grp.id) h.append(el("div", "ggoal", `🎯 Goal: ${grp.goal_text}` + (grp.goal_by ? ` (set by ${grp.goal_by})` : "")));
       if (S.groupInfo === grp.id) h.append(groupPanel(grp));
     }
+    return;
+  }
+  if (S.chan === "advisor") {
+    h.append(el("div", "icon", "🧭"));
+    const t = el("div"); t.append(el("div", "title", "Advisor"));
+    t.append(el("div", "meta", "Works for you alone, and knows only what you know: your empire, the leaders you've met, and what they've said to you or in public."));
+    t.style.flex = "1"; t.style.minWidth = "0";
+    h.append(t);
+    if (S.state.settings && !S.state.settings.advisor_on) {
+      const on = el("button", "act", "Turn advisor on");
+      on.title = "It's off to save usage: no picks and no answers";
+      on.onclick = () => api("/api/settings", { advisor_on: true });
+      on.style.marginLeft = "auto"; h.append(on);
+      return;
+    }
+    const b = el("button", "act", "🧭 Picks for this turn");
+    b.title = "Ask for this turn's recommendations now (they also come at the start of each of your turns)";
+    b.onclick = () => api("/api/advisor_picks");
+    b.style.marginLeft = "auto"; h.append(b);
     return;
   }
   if (S.chan === "news") {
@@ -1107,7 +1177,7 @@ function bubble(e) {
   const b = el("div", "b" + (mine ? " mine" : ""));
   let from = mine ? "You" : e.sender_name;
   if (S.chan === "spy" && e.to_name) from = `${e.sender_name} → ${e.to_name}`;
-  if (typeof S.chan === "number" && !mine) from = null;
+  if ((typeof S.chan === "number" || S.chan === "advisor") && !mine) from = null;
   if (from) b.append(el("div", "from", from));
   if (e.reply_to) b.append(el("div", "q", `${e.reply_to.name}: ${e.reply_to.text}`));
   if (e.rumor_about) b.append(el("div", "rumor", `🗣️ rumor about ${e.rumor_about}`));
@@ -1129,6 +1199,18 @@ function thoughtCard(e) {
   if (e.acted && e.acted.length) did.push(e.acted.join(", ").replace(/_/g, " "));
   if (e.plan) c.append(el("div", "plan", "Plan: " + e.plan));
   if (did.length) c.append(el("div", "plan", "Did: " + did.join(" · ")));
+  return c;
+}
+
+function picksCard(e) {
+  const p = e.picks || {}, c = el("div", "card news picks");
+  c.append(el("div", "t", "🧭 " + (p.headline || "This turn's picks")));
+  const row = (label, v) => { if (!v) return; const r = el("div", "ni"); r.append(el("b", null, label + ": "), document.createTextNode(v)); c.append(r); };
+  if (p.research) row("Research", p.research.pick + (p.research.why ? ` (${p.research.why})` : ""));
+  if (p.civic) row("Civic", p.civic.pick + (p.civic.why ? ` (${p.civic.why})` : ""));
+  if ((p.cities || []).length) { c.append(el("div", "nh", "Cities")); for (const x of p.cities) c.append(el("div", "ni", `• ${x.city}: ${x.build}` + (x.why ? ` (${x.why})` : ""))); }
+  if ((p.diplomacy || []).length) { c.append(el("div", "nh", "Diplomacy")); for (const x of p.diplomacy) c.append(el("div", "ni", "• " + x)); }
+  if ((p.watch_out || []).length) { c.append(el("div", "nh", "Watch out")); for (const x of p.watch_out) c.append(el("div", "ni warn", "⚠️ " + x)); }
   return c;
 }
 
@@ -1345,6 +1427,7 @@ function renderMsgs(toBottom) {
         : "The world is quiet. Say something to every leader at once, or end your turn.")
       : S.chan === "spy" ? "Nothing overheard yet."
       : S.chan === "minds" ? "No thoughts yet. They show up here as each leader thinks."
+      : S.chan === "advisor" ? "Ask your advisor anything: what to research, whether an offer is fair, who to trust, what a leader really meant. Its picks for each turn show up here too."
       : "No words exchanged yet. They're waiting to hear from you.";
     box.append(el("div", "empty", msg));
   }
@@ -1357,10 +1440,12 @@ function renderMsgs(toBottom) {
     else if (e.kind === "proposal" && S.chan !== "spy") box.append(proposalCard(e));
     else if (e.kind === "pact" && S.chan !== "spy") box.append(pactCard(e));
     else if (e.kind === "news") box.append(newsCard(e));
+    else if (e.kind === "picks") box.append(picksCard(e));
     else if (e.kind === "turn") box.append(el("div", "divider", e.text));
     else box.append(el("div", "line " + e.kind, (ICON[e.kind] || "") + e.text));
   }
   if (writer) box.append(el("div", "typing", `${writer.leader} is composing a reply…`));
+  if (S.chan === "advisor" && (S.state.status || "").startsWith("Your advisor")) box.append(el("div", "typing", S.state.status));
   const mine = grew && last.sender === S.state.me.id;
   if (toBottom || !sameChat || mine || nearBottom) { S.newBelow = false; box.scrollTop = box.scrollHeight; }
   else {
@@ -1388,12 +1473,14 @@ $("composer").onsubmit = (ev) => {
   $("input").value = "";
   const reply_to = S.reply ? S.reply.id : undefined;
   setReply(null);
-  api("/api/say", { to: S.chan, text, reply_to });
+  if (S.chan === "advisor") api("/api/advisor", { text });
+  else api("/api/say", { to: S.chan, text, reply_to });
 };
 $("replyX").onclick = () => setReply(null);
 $("input").addEventListener("keydown", (ev) => { if (ev.key === "Escape" && S.reply) setReply(null); });
 $("offersBtn").onclick = () => togglePop("offers");
 $("prefsBtn").onclick = () => togglePop("prefs");
+$("settingsBtn").onclick = () => togglePop("settings");
 $("usageBtn").onclick = () => togglePop("usage");
 setupPrefs();
 $("input").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("composer").requestSubmit(); } });

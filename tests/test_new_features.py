@@ -671,3 +671,117 @@ def test_the_story_is_rebuilt_from_old_chats_the_first_time(tmp_path):
     c._load_history(tmp_path)                                              # no history.json yet
     assert [(h["turn"], h["kind"]) for h in c.history] == [(40, "war"), (41, "deal"), (42, "said"), (43, "pact")]
     assert c.history[0]["civs"] == [1, 3] and c.history[2]["by"] == 2
+
+
+# ---- your advisor ------------------------------------------------------------------
+PICKS = json.dumps({"headline": "Get walls up before Montezuma arrives.",
+                    "research": {"pick": "Masonry", "why": "walls"}, "civic": {"pick": "Code of Laws", "why": "slots"},
+                    "cities": [{"city": "London", "build": "Ancient Walls", "why": "closest to the Aztecs"}],
+                    "diplomacy": ["Take Cleopatra's friendship."], "watch_out": ["Aztec warriors near London."]})
+
+
+def _with_advisor(brain, **kw):
+    from civ_council.advisor import Advisor
+    c = three_leaders(ScriptedClient(lambda s, m: "{}"), **kw)
+    seen = []
+    def wrapped(system, messages):
+        seen.append(messages[0]["content"])
+        return brain(system, messages)
+    c.advisor = Advisor(ScriptedClient(wrapped, name="claude-code:sonnet"), usage_log=c.usage)
+    return c, seen
+
+
+def test_the_advisor_knows_only_what_you_would_know():
+    c, seen = _with_advisor(lambda s, m: "Trust her, for now.", spy=True)
+    c.game.has_met = lambda a, b: not ({a, b} == {0, 3})            # you haven't met Montezuma
+    c._deliver(1, 0, "Gilgamesh to you: let's be friends.")
+    c._deliver(1, 2, "Gilgamesh to Cleopatra: the Englishman is weak.")   # private between AIs: Spy only
+    c._deliver(3, "all", "Montezuma to the world: tremble.")              # you haven't met him: secret
+    assert c.ask_advisor("should I trust Gilgamesh?")
+    c.advisor_reply()
+    ctx = seen[-1]
+    assert "let's be friends" in ctx and "should I trust Gilgamesh?" in ctx
+    assert "the Englishman is weak" not in ctx and "tremble" not in ctx               # Spy-only and secret talk
+    assert '"trust":' not in ctx and "your_view_of_them" not in ctx                  # the leaders' minds
+    said = [e for e in c.entries if e["channel"] == "advisor"]
+    assert [(e["kind"], e.get("advisor", False)) for e in said] == [("message", False), ("message", True)]
+    assert said[-1]["text"] == "Trust her, for now."
+    assert c.usage[-1]["leader"] == "Advisor" and c.usage[-1]["purpose"] == "advisor"
+
+
+def test_the_advisor_gives_its_picks_each_turn_next_to_civs():
+    c, seen = _with_advisor(lambda s, m: PICKS)
+    notes = []
+    c.game.notify = lambda *a: notes.append(a)
+    c.end_turn()
+    [card] = [e for e in c.entries if e["channel"] == "advisor" and e["kind"] == "picks"]
+    assert card["text"] == "Get walls up before Montezuma arrives."
+    assert card["picks"]["research"]["pick"] == "Masonry" and card["picks"]["cities"][0]["build"] == "Ancient Walls"
+    assert notes and "research Masonry" in notes[0][2] and "London: Ancient Walls" in notes[0][2]
+    assert c.advisor.last_picks == card["picks"]
+    c.advisor.client._fn = lambda s, m: "not json"                       # a bad answer: no card, no harm
+    assert c.advisor_picks() is None
+
+
+def test_you_chat_with_the_advisor_from_the_browser_and_can_turn_it_off():
+    from civ_council.web import Server
+    c, _ = _with_advisor(lambda s, m: "Build a Campus in York.")
+    server = Server(c)
+    assert server.state(0)["advisor"] is True
+    assert server.handle("/api/advisor", {"text": "what next?"}) == {"ok": True}
+    _wait(server)
+    assert [e["text"] for e in c.entries if e["channel"] == "advisor"] == ["what next?", "Build a Campus in York."]
+    off = build(make_parser("t").parse_args(["--advisor-model", "none"]))
+    assert off.advisor is None and Server(off).handle("/api/advisor", {"text": "hi"})["ok"] is False
+    offline = build(make_parser("t").parse_args([]))
+    assert offline.advisor is not None and offline.advisor_picks() is None   # the fake provider gives no picks
+
+
+# ---- Settings: models and the advisor's switch -----------------------------------------
+def test_models_can_be_switched_from_the_browser_and_are_saved_with_the_game(tmp_path):
+    from civ_council.web import Server
+    made = []
+    def factory(model, timeout=None):
+        client = ScriptedClient(lambda s, m: "{}", name=f"claude-code:{model}")
+        client.timeout = timeout
+        made.append((model, timeout))
+        return client
+    c, _ = _with_advisor(lambda s, m: PICKS)
+    c.llm_factory, c.memory_dir = factory, tmp_path
+    server = Server(c)
+    assert server.state(0)["settings"]["editable"] is True
+    assert server.handle("/api/settings", {"turn": "sonnet", "strategy": "off", "advisor": "opus"}) == {"ok": True}
+    st = server.state(0)["settings"]
+    assert (st["turn"], st["strategy"], st["advisor"]) == ("sonnet", "off", "opus")
+    assert all(a.client.name == "claude-code:sonnet" and a.strategy_client is None for a in c.agents.values())
+    assert len({id(a.client) for a in c.agents.values()}) == len(c.agents)     # each leader its own client
+    assert server.handle("/api/settings", {"talk": "gpt"})["ok"] is False
+    assert server.handle("/api/settings", {"talk": "haiku"}) == {"ok": True}
+    assert ("haiku", 45) in made                                                # you're waiting on talk: a timeout
+    _wait(server)
+    c.save_memories(tmp_path)
+    again, _ = _with_advisor(lambda s, m: "{}")
+    again.llm_factory = factory
+    again.load_memories(tmp_path)
+    st = again.model_settings()
+    assert (st["turn"], st["talk"], st["strategy"], st["advisor"]) == ("sonnet", "haiku", "off", "opus")
+
+
+def test_the_advisor_switch_stops_its_picks_and_answers():
+    from civ_council.web import Server
+    c, seen = _with_advisor(lambda s, m: PICKS)
+    server = Server(c)
+    assert server.handle("/api/settings", {"advisor_on": False}) == {"ok": True}
+    assert server.state(0)["settings"]["advisor_on"] is False
+    c.end_turn()
+    assert seen == [] and not any(e["channel"] == "advisor" for e in c.entries)   # nothing used
+    assert "off" in server.handle("/api/advisor", {"text": "hi"})["error"]
+    server.handle("/api/settings", {"advisor_on": True})
+    assert c.advisor_picks() is not None
+
+
+def test_other_providers_keep_their_models_as_started():
+    from civ_council.web import Server
+    offline = build(make_parser("t").parse_args([]))
+    st = Server(offline).state(0)["settings"]
+    assert st["editable"] is False and "only" in offline.set_models(turn="opus")

@@ -90,6 +90,13 @@ Read README.md first. What works in the real game, and why, is in `bridge/PROBE_
   declines theirs once yours is sent), Diplomacy panel per leader (what Civ's leader
   screen shows), replies, turn dividers, new-message button, read state kept per game in the browser,
   notifications/sound/read-aloud, usage meter.
+- Advisor (`advisor.py`, channel `advisor`, `--advisor-model`, default the talk model): the player's own Claude.
+  Its context is only what the player would know (their snapshot, steering options, offers, their pacts, their
+  private/group chats and public statements; never Spy, secret entries or leaders' trust). Chat via
+  `/api/advisor`; picks (research, civic, city builds, diplomacy, dangers) each turn after the leaders move, as a
+  `picks` card and one line in Civ's notifications; Civ's own recommendations are left alone.
+- ⚙️ Settings (browser): the advisor's on/off switch and a model per job (turn, talk, strategy incl. off,
+  advisor), switched live via `Council.set_models` + `llm_factory` (Claude Code only), saved in prefs.json.
 - History page (`/history`, `static/history.html`, `/api/history`, the ⏳ button): a god's-eye story of the game
   (everything, not filtered by what you know). `Council.history` (`history.json`, never trimmed like the chat) gets a
   line for wars, treaties, deals (AI-to-AI too, even with Spy off), pacts agreed/broken, group events, public

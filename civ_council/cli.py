@@ -53,7 +53,40 @@ def build(args) -> Council:
         if getattr(args, "deep_strategy_every", None) is not None:
             agents[i].deep_every = args.deep_strategy_every
     game = MockGame(players, seed=args.seed)
-    return Council(game, agents, human_id=0, spy=args.spy, summarize_after=args.summarize_after)
+    council = Council(game, agents, human_id=0, spy=args.spy, summarize_after=args.summarize_after)
+    council.advisor = _advisor(args, council)
+    council.llm_factory = _llm_factory(args)
+    return council
+
+
+def _llm_factory(args):
+    """For the browser's Settings: model name -> a new client (Claude Code only; other providers name models
+    differently, so their models stay as started)."""
+    if args.provider != "claude-code":
+        return None
+    def make(model: str, timeout: float | None = None):
+        client = make_client(args.provider, model, args.base_url, getattr(args, "claude_bin", None))
+        if timeout and hasattr(client, "timeout"):
+            client.timeout = timeout
+        return client
+    return make
+
+
+def _advisor(args, council):
+    """Your own advisor: the talk model by default (Sonnet with Claude Code); --advisor-model none turns it off."""
+    from .advisor import Advisor
+    pick = getattr(args, "advisor_model", None)
+    if pick == "none":
+        return None
+    provider = "fake" if args.provider == "fake" else args.provider
+    if pick is None:
+        client = _talk_client(args, provider, args.model) or make_client(provider, args.model, args.base_url,
+                                                                         getattr(args, "claude_bin", None))
+    else:
+        client = make_client(provider, pick, args.base_url, getattr(args, "claude_bin", None))
+    if hasattr(client, "timeout"):
+        client.timeout = 120
+    return Advisor(client, usage_log=council.usage)
 
 
 def _strategy_client(args, provider: str, model: str | None, client):
@@ -118,7 +151,9 @@ def build_civ6(args) -> Council:
     council = Council(game, agents, human_id=game.local_player, spy=args.spy,
                       summarize_after=args.summarize_after, parallel=min(5, max(1, len(agents))),
                       memory_dir=Path("memories") / f"civ6-{game.game_id}")
-    council.load_memories(council.memory_dir)   # leaders remember you from earlier sessions of this game
+    council.advisor = _advisor(args, council)
+    council.llm_factory = _llm_factory(args)
+    council.load_memories(council.memory_dir)   # (also your Settings: models, the advisor switch)   # leaders remember you from earlier sessions of this game
     council.sync_moments()                      # Civ's own timeline fills the History page back to turn 1
     game.end_turn()                              # baseline: report only what changes from now on
     return council
@@ -142,6 +177,8 @@ def make_parser(description: str = "Talk, scheme and fight with AI leaders.") ->
     ap.add_argument("--deep-strategy-every", type=int, default=None,
                     help="turns between grand strategies by the strategy model (default 50; the talk model, Sonnet, "
                          "writes the rewrites in between; 0 = the strategy model writes every one)")
+    ap.add_argument("--advisor-model", default=None,
+                    help="model for your own advisor (default: the talk model, sonnet with claude-code; 'none' = no advisor)")
     ap.add_argument("--leader-models", default=None,
                     help="per-leader override, e.g. cleopatra=sonnet,montezuma=haiku")
     ap.add_argument("--base-url", default=None)

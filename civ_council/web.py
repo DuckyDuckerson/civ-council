@@ -126,6 +126,8 @@ class Server:
             "status": c.status,
             "busy": self.pending > 0,
             "autosave": self.autosave,
+            "advisor": c.advisor is not None,
+            "settings": c.model_settings(),
             "live": self.live,
             "boot": self.boot,
             "spy": c.spy,
@@ -350,6 +352,22 @@ class Server:
                 return {"ok": False, "error": res.message}
             if responders:
                 self.submit(lambda: c.answer(responders))
+        elif path == "/api/settings":
+            if "advisor_on" in body:
+                c.advisor_on = bool(body["advisor_on"])
+            why = c.set_models(**{k: body[k] for k in c.MODEL_JOBS if body.get(k)}) if any(
+                body.get(k) for k in c.MODEL_JOBS) else ""
+            if why:
+                return {"ok": False, "error": why}
+        elif path == "/api/advisor":
+            if not c.ask_advisor(body.get("text", "")):
+                return {"ok": False, "error": "your advisor is off (turn it on in ⚙ Settings)" if c.advisor is not None
+                        else "no advisor in this game (started with --advisor-model none?)"}
+            self.submit(c.advisor_reply)
+        elif path == "/api/advisor_picks":
+            if c.advisor is None:
+                return {"ok": False, "error": "no advisor in this game"}
+            self.submit(c.advisor_picks)
         elif path == "/api/group_pact":
             res, responders = c.human_offer_group_pact(str(body.get("group", "")), body.get("title"), body.get("terms"),
                                                        body.get("turns"), war_on=body.get("war_on"),
