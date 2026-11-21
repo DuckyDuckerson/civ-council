@@ -1130,7 +1130,9 @@ class Council:
             "taking its turn, with a message from you" if with_human else "taking its turn")
         if review:
             why += " (empire review)"
-        text = d.thoughts or (f"(no usable answer: {d.error})" if d.error else "(kept its thoughts to itself)")
+        said = " ".join(str(getattr(d, "raw", "") or "").split())[:240]
+        text = d.thoughts or (f"(no usable answer: {d.error})" + (f' It replied: "{said}"' if said else "")
+                              if d.error else "(kept its thoughts to itself)")
         acted = [a.get("type") for a in d.actions] + [
             f"{'accepted' if r.get('accept') else 'declined'} offer #{r.get('id')}" for r in d.proposal_responses]
         if d.replan:

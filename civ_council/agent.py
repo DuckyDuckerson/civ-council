@@ -49,6 +49,10 @@ OUTPUT_SCHEMA = """Reply with ONE JSON object and nothing else:
 Any list can be empty. Only include memory entries when something actually changed your view."""
 
 
+REPLY_AGAIN = ("\n\nYour previous reply couldn't be used: it wasn't a JSON object. Reply again with ONLY the JSON "
+               "object described above (put anything you want to say in \"messages\"), no other text.")
+
+
 STRATEGY_TASK = """You are now this leader's grand strategist, thinking far ahead (the game has no end date and may run
 hundreds more turns). Read everything above and write the long-term plan the leader will follow turn by turn.
 It must serve how_to_win. Be realistic about strength, allies and threats, and patient: most objectives take
@@ -748,13 +752,22 @@ military_with_city_states, count those too, and remember your own backers.
         clients = [self.talk_client, self.client] if (with_human and self.talk_client) else [self.client]
         if self.talk_client and len(clients) == 1:
             clients.append(self.talk_client)   # a routine call that fails (or is refused) gets one more try
-        retried = False
+        retried = reshaped = False
         while clients:   # if one model stalls, fails or refuses, the other answers
             client = clients.pop(0)
             try:
                 self.last_model = client.name
                 raw = self._call(client, user, "talk" if with_human else mode, game.turn)
                 decision = parse_decision(raw)
+                if decision.error and not reshaped:
+                    # Answered, but not in the JSON shape (now and then a plain-text reply): ask once more
+                    reshaped = True
+                    again = parse_decision(self._call(client, user + REPLY_AGAIN, "talk" if with_human else mode,
+                                                      game.turn))
+                    if not again.error or (again.raw or "").strip():
+                        decision = again
+                if decision.error and clients:
+                    continue   # the other model gets its turn
                 break
             except Exception as e:  # network errors etc. shouldn't kill the game
                 decision = Decision(error=f"LLM call failed: {e}")

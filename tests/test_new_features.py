@@ -785,3 +785,32 @@ def test_other_providers_keep_their_models_as_started():
     offline = build(make_parser("t").parse_args([]))
     st = Server(offline).state(0)["settings"]
     assert st["editable"] is False and "only" in offline.set_models(turn="opus")
+
+
+# ---- replies that come back in the wrong shape ------------------------------------------
+def test_a_reply_that_isnt_json_is_asked_for_again():
+    from civ_council.agent import LeaderAgent
+    from civ_council.personas import PERSONAS
+    answers = ["sure thing, take the hills lol", reply(messages=[{"to": 0, "text": "take the hills"}])]
+    talk = ScriptedClient(lambda s, m: answers.pop(0), name="claude-code:sonnet")
+    routine = ScriptedClient(lambda s, m: "{}", name="claude-code:haiku")
+    agent = LeaderAgent(1, PERSONAS["gilgamesh"], routine, talk_client=talk)
+    c = make_world({})
+    d = agent.decide(c.game, "reply", [{"from_id": 0, "from": "Me", "to": "you", "text": "hi"}], with_human=True)
+    assert not d.error and d.messages[0]["text"] == "take the hills"
+    assert len(talk.calls) == 2 and "wasn't a JSON object" in talk.calls[1][1][0]["content"] and routine.calls == []
+
+
+def test_if_it_still_isnt_json_the_other_model_answers_and_failures_show_what_was_said():
+    from civ_council.agent import LeaderAgent
+    from civ_council.personas import PERSONAS
+    talk = ScriptedClient(lambda s, m: "I'd rather not say.", name="claude-code:sonnet")
+    routine = ScriptedClient(lambda s, m: reply(messages=[{"to": 0, "text": "fine, here"}]), name="claude-code:haiku")
+    agent = LeaderAgent(1, PERSONAS["gilgamesh"], routine, talk_client=talk)
+    c = make_world({})
+    d = agent.decide(c.game, "reply", [{"from_id": 0, "from": "Me", "to": "you", "text": "hi"}], with_human=True)
+    assert d.messages[0]["text"] == "fine, here" and len(talk.calls) == 2 and len(routine.calls) == 1
+    c2 = make_world({1: ScriptedClient(lambda s, m: "just words, no braces")})
+    c2.end_turn()
+    mind = next(e for e in c2.entries if e["channel"] == "minds" and e.get("sender") == 1)
+    assert mind["text"].startswith("(no usable answer: no JSON object in reply)") and "just words, no braces" in mind["text"]

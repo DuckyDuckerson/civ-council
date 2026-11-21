@@ -125,7 +125,9 @@ Read README.md first. What works in the real game, and why, is in `bridge/PROBE_
   `python3 -m civ_council.web --game civ6 --provider claude-code --model haiku --lan`
   (`--talk-model`, `--strategy-model opus|same|none`, `--spy`). Run it in a terminal and stop it
   (Ctrl+C) when a probe needs the tuner.
-- If a model call fails or is refused, the leader retries once with its other model. A reply to you that gets
+- If a model call fails or is refused, the leader retries once with its other model. A reply that isn't the JSON
+  shape (now and then a plain-text answer) is asked for once more with a reminder (`REPLY_AGAIN`), then the other
+  model tries; if all fail, the Minds card shows the start of what the model said. A reply to you that gets
   stuck (45 s) is tried once more with the talk model first (the routine model misread the player too often).
 - The player's messages carry `names_in_message` (`council.names_in`): who "egypt", "monty", "egpyt" means, and
   whether the reader has met them. The system prompt explains pasted "me: / india:" quotes.
