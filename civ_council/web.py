@@ -481,6 +481,7 @@ def main(argv: list[str] | None = None) -> None:
     ap = make_parser("Civ Council in your browser.")
     ap.add_argument("--port", type=int, default=8765)
     ap.add_argument("--lan", action="store_true", help="allow other devices on your wifi (e.g. your phone)")
+    ap.add_argument("--open", action="store_true", help="open the page in your browser once it's running")
     args = ap.parse_args(argv)
     try:
         council = build(args)
@@ -497,6 +498,9 @@ def main(argv: list[str] | None = None) -> None:
         print(f"You've met: {', '.join(met) or 'nobody yet'}. Memories: {server.memory_dir}")
         print("End your turns in Civ 6; the leaders take theirs automatically.")
     print(f"Civ Council running at http://localhost:{args.port}")
+    if args.open:
+        import webbrowser
+        threading.Timer(0.5, lambda: webbrowser.open(f"http://localhost:{args.port}")).start()
     if args.lan:
         print(f"On your phone (same wifi): http://{lan_ip()}:{args.port}  — anyone on your wifi can open this.")
     print("Ctrl+C to stop.")

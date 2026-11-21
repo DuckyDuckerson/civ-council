@@ -120,7 +120,9 @@ Read README.md first. What works in the real game, and why, is in `bridge/PROBE_
 ## Running
 - Tests: `python3 -m pytest -q`
 - Offline fake leaders: `python3 -m civ_council.web`
-- Real game: `python3 -m civ_council.web --game civ6 --provider claude-code --model haiku --lan`
+- Real game: double-click `play.command` (= `python3 -m civ_council.web --game civ6 --provider claude-code
+  --model haiku --lan --open`; `--open` opens the browser), or the command itself:
+  `python3 -m civ_council.web --game civ6 --provider claude-code --model haiku --lan`
   (`--talk-model`, `--strategy-model opus|same|none`, `--spy`). Run it in a terminal and stop it
   (Ctrl+C) when a probe needs the tuner.
 - If a model call fails or is refused, the leader retries once with its other model. A reply to you that gets

@@ -76,30 +76,35 @@ and to you: arming a proxy, paying a debt in steel.
 ## Play
 
 1. Start Civ 6 and load (or start) a **single-player** game. Wait until you're on the map.
-2. In Terminal:
-
-   ```bash
-   cd civ-council
-   python3 -m civ_council.web --game civ6 --provider claude-code --model haiku
-   ```
-
-3. Open **http://localhost:8765** in your browser.
-4. Play Civ as normal. When you end your turn in Civ, the leaders take theirs: they read the news, answer you
+2. **Double-click `play.command`** in the civ-council folder. A Terminal window opens, Civ Council connects to
+   your game, and the chat opens in your browser.
+3. Play Civ as normal. When you end your turn in Civ, the leaders take theirs: they read the news, answer you
    and each other, and make their moves. Talk to them any time.
 
-You can only talk to leaders you've met in the game. To stop, press `Ctrl+C` in Terminal. Everything is saved
-automatically: next time you load the same game, the leaders remember you.
+It starts with the defaults: Haiku for the leaders' turns, Sonnet when they talk with you and for your advisor,
+Opus for grand strategy. Change any of them, or turn the advisor off, in **⚙️ Settings** in the browser; your
+choices are saved with each game.
+
+You can only talk to leaders you've met in the game. To stop, close the Terminal window (or press `Ctrl+C` in
+it). Everything is saved automatically: next time you load the same game, the leaders remember you.
+
+If macOS says it can't open `play.command` (this happens with a downloaded ZIP), right-click it, choose
+**Open**, and confirm once. Or run it from Terminal instead:
+
+```bash
+cd civ-council
+./play.command
+```
 
 ### On your phone
 
-Add `--lan`:
+`play.command` also lets your phone in. Terminal shows an address like `http://192.168.1.20:8765`: open
+that on your phone while it's on the same wifi. Anyone on your wifi could open it too, so play this way at home.
+To keep it on this Mac only, run the full command without `--lan`:
 
 ```bash
-python3 -m civ_council.web --game civ6 --provider claude-code --model haiku --lan
+python3 -m civ_council.web --game civ6 --provider claude-code --model haiku --open
 ```
-
-It prints an address like `http://192.168.1.20:8765`. Open that on your phone while it's on the same wifi.
-Anyone on your wifi could open it too, so use `--lan` at home.
 
 ### Try it without Civ 6
 
