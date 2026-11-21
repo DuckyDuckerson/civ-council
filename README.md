@@ -19,6 +19,8 @@ up on you, and lie to each other.
   of each turn it gives its own picks (research, civic, what each city should build, diplomacy) next to Civ's
   own recommendations. It knows only what you know.
 - **History page**: a timelapse of the whole game, with who trusts whom on every turn and what happened when.
+- **One-click start and a Settings menu**: double-click to play, then pick which Claude model does what (or
+  switch the advisor off) right in the browser, to spend as much or as little of your usage as you like.
 - **Spy and Minds** (optional cheats): read the leaders' private messages to each other and their private
   reasoning.
 - Their messages also pop up in Civ's own notification stack, and can be read aloud.
@@ -33,8 +35,8 @@ Single player only. Tested on macOS with Civilization VI: Gathering Storm.
   might work but hasn't been tried.
 - **A Claude Pro or Max subscription.** The leaders use Claude Code on your own subscription, so there's no API
   key and no extra bill, but they do use your plan's usage limits (see [Usage](#usage-and-cost)).
-- **Python 3.9 or newer.** The `python3` that comes with macOS is fine. Nothing else to install: Civ Council uses
-  only Python's standard library.
+- **Python 3.9 or newer.** The `python3` that comes with macOS is fine, and `play.command` finds a new enough one
+  by itself. Nothing else to install: Civ Council uses only Python's standard library.
 
 ## Install (once)
 
@@ -106,6 +108,18 @@ To keep it on this Mac only, run the full command without `--lan`:
 python3 -m civ_council.web --game civ6 --provider claude-code --model haiku --open
 ```
 
+### In the browser
+
+- **Sidebar**: World (everyone hears it), World News (what happened each turn that you'd know about), 🧭 Advisor,
+  your group chats, and a private chat with each leader you've met.
+- **A leader's chat**: buttons for deals, pacts, friendship, alliance, denouncing and war, and a 🏛️ Diplomacy
+  panel with what Civ's own leader screen shows. When a leader offers you a deal, **Counter** opens it with
+  their terms filled in so you can change them and send it back.
+- **Group chats**: ℹ️ Group info (members, how they get along, the goal, votes), 📜 Group pact, ＋ Invite.
+- **Header**: offers waiting for you, ⏱ usage, ⚙️ Settings, 🔔 notifications (pop-ups, sound, read-aloud, and
+  whether Civ's own AI pop-ups get closed), ⏳ History, and 🕵️ Spy, which turns on the cheat channels (Spy and
+  Minds).
+
 ### Try it without Civ 6
 
 ```bash
@@ -114,6 +128,9 @@ python3 -m civ_council.web --provider claude-code --model haiku   # Claude leade
 ```
 
 ## Options
+
+Model choices and the advisor's switch are easiest in **⚙️ Settings**, which also remembers them per game. The
+options below set the starting defaults when you run Civ Council from Terminal:
 
 | Option | What it does |
 | --- | --- |
@@ -126,6 +143,8 @@ python3 -m civ_council.web --provider claude-code --model haiku   # Claude leade
 | `--spy` | Start with the Spy channel on (you can switch it on in the browser too). |
 | `--voice roleplay` | Leaders talk like historical figures instead of the default casual chat. |
 | `--summarize-after 70` | A leader condenses its memory after this many new messages and notes. |
+| `--lan` | Let other devices on your wifi (your phone) open it. `play.command` turns this on. |
+| `--open` | Open the browser once it's running. `play.command` turns this on. |
 | `--port 8765` | The browser port. |
 
 ## Usage and cost
@@ -137,7 +156,8 @@ strategy. Expect somewhere around 8-10 calls a turn
 with six AI civs, more when you chat a lot. On a subscription you pay nothing extra; it just uses your limits.
 The ⏱ meter in the browser shows what your game has used, with the equivalent API price.
 
-To use less: keep Haiku for turns, play with fewer civs, or set `--strategy-model sonnet`.
+To use less, open **⚙️ Settings**: keep Haiku for the leaders' turns, set grand strategy to Sonnet or Off, and
+switch the advisor off when you don't need it. Fewer AI civs also means fewer calls.
 
 ## Safety and privacy
 
@@ -153,6 +173,8 @@ To use less: keep Haiku for turns, play with fewer civs, or set `--strategy-mode
 - **"Civ 6 didn't answer" / can't connect**: Civ must be running with a game loaded, and `EnableTuner 1` set
   while Civ was closed. Only one program can use the tuner at a time, so close FireTuner or a second Civ Council.
   If you just restarted Civ Council, wait a few seconds and try again.
+- **`play.command`'s window says "Civ Council stopped"**: the message above it says why, most often that Civ
+  isn't running with a game loaded yet. Start the game, then double-click it again.
 - **"claude: not found" or "not logged in"**: run `claude` in Terminal and log in. If it's installed somewhere
   unusual, pass `--claude-bin /path/to/claude`.
 - **Leaders stop answering for a while**: you may have hit your Claude plan's usage limit. It resets on its own.
@@ -178,8 +200,10 @@ can't control in Civ 6 was worked out by experiment: see [`bridge/PROBE_RESULTS.
 | File | What it does |
 | --- | --- |
 | `civ_council/agent.py` | Each leader's briefing, prompts, decisions, grand strategy and memory summaries |
-| `civ_council/council.py` | Turns, messages, group chats, pacts, deals, history, saving |
+| `civ_council/council.py` | Turns, messages, group chats, pacts, deals, history, settings, saving |
+| `civ_council/advisor.py` | Your own advisor: what it may know, its answers and its picks each turn |
 | `civ_council/web.py`, `static/` | The browser chat and the History page |
+| `play.command` | The double-click launcher |
 | `civ_council/memory.py`, `pacts.py` | Trust, notes, promises, conversations; pacts and group pacts |
 | `civ_council/llm.py` | Claude Code (`claude -p`), and the Anthropic, OpenAI and Ollama APIs |
 | `bridge/civ6_game.py`, `tuner.py` | The real game, through Civ 6's tuner port |
