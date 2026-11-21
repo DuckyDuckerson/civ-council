@@ -1,0 +1,325 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Civ Council History</title>
+<style>
+  :root {
+    --bg: #0d141f; --panel: #141e2c; --panel2: #1b2738; --line: #26364d;
+    --text: #ece4d2; --muted: #8b97a9; --gold: #d6aa52; --gold-dim: #8f733b;
+    --war: #e0574f; --ally: #4fb87d; --warn: #e3a33b;
+    --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; background: var(--bg); color: var(--text); font: 15px/1.45 var(--sans); }
+  header { position: sticky; top: 0; z-index: 2; background: var(--panel); border-bottom: 1px solid var(--line); padding: 10px 16px; }
+  .top { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; }
+  h1 { font: 22px var(--serif); margin: 0; }
+  a.back { color: var(--muted); text-decoration: none; font-size: 14px; }
+  a.back:hover { color: var(--text); }
+  .note { color: var(--muted); font-size: 12px; margin-left: auto; }
+  .scrub { display: flex; align-items: center; gap: 10px; margin-top: 8px; }
+  .scrub input[type=range] { flex: 1; accent-color: var(--gold); min-width: 0; }
+  button, select { font: inherit; color: var(--text); background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; cursor: pointer; }
+  button:hover { border-color: var(--gold-dim); }
+  button.on { border-color: var(--gold); color: var(--gold); }
+  #play { width: 44px; }
+  #turnLabel { font: 18px var(--serif); min-width: 86px; text-align: right; color: var(--gold); }
+  #strip { display: block; width: 100%; height: 26px; margin-top: 6px; cursor: pointer; }
+  main { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 14px; padding: 14px 16px 30px; max-width: 1400px; margin: 0 auto; }
+  .card { background: var(--panel); border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; min-width: 0; }
+  .card h2 { font: 16px var(--serif); margin: 0 0 8px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .card h2 .sub { font: 12px var(--sans); color: var(--muted); }
+  .wide { grid-column: 1 / -1; }
+  svg text { font-family: var(--sans); }
+  .legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13px; margin-top: 6px; }
+  .legend span b { font-weight: 600; }
+  .pills { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 8px; }
+  .pills button { padding: 3px 9px; font-size: 13px; }
+  .events { max-height: 420px; overflow-y: auto; }
+  .ev { display: flex; gap: 10px; padding: 6px 2px; border-top: 1px solid var(--line); font-size: 14px; }
+  .ev:first-child { border-top: 0; }
+  .ev .t { color: var(--muted); min-width: 44px; font-variant-numeric: tabular-nums; }
+  .ev .k { min-width: 22px; text-align: center; }
+  .ev .who { color: var(--gold); }
+  .ev.war .x { color: #f2a19b; }
+  .empty { color: var(--muted); padding: 8px 2px; }
+  .filters { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
+  .filters button { padding: 2px 8px; font-size: 12px; }
+  @media (max-width: 860px) {
+    main { grid-template-columns: minmax(0, 1fr); padding: 10px 10px 24px; }
+    header { padding: 8px 10px; }
+    .note { margin-left: 0; width: 100%; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <div class="top">
+    <a class="back" href="/">← Chat</a>
+    <h1>⏳ History</h1>
+    <span class="note" id="note"></span>
+  </div>
+  <div class="scrub">
+    <button id="play" title="Play the timelapse">▶</button>
+    <input type="range" id="turn" min="1" max="1" value="1" aria-label="Turn">
+    <span id="turnLabel">Turn 1</span>
+    <select id="speed" title="Timelapse speed">
+      <option value="900">Slow</option><option value="400" selected>Normal</option><option value="120">Fast</option>
+    </select>
+  </div>
+  <svg id="strip" aria-label="What happened each turn"></svg>
+</header>
+<main>
+  <section class="card">
+    <h2>Trust web <span class="sub" id="webSub">who trusts whom on this turn · tap a leader to focus</span></h2>
+    <svg id="web" viewBox="0 -10 520 490" width="100%" role="img" aria-label="Trust between leaders"></svg>
+    <div class="legend"><span style="color:var(--war)">■ distrust</span><span style="color:var(--muted)">■ neutral</span><span style="color:var(--ally)">■ trust</span><span class="sub" style="color:var(--muted)">arrow = how much the leader it starts from trusts the one it points to; thicker = stronger</span></div>
+  </section>
+  <section class="card">
+    <h2>Trust over time <span class="sub" id="graphSub"></span></h2>
+    <div class="pills" id="who"></div>
+    <div class="pills" id="dir">
+      <button data-dir="out" class="on">Who they trust</button><button data-dir="in">Who trusts them</button>
+    </div>
+    <svg id="graph" viewBox="0 0 560 300" width="100%" role="img" aria-label="Trust over time"></svg>
+    <div class="legend" id="graphLegend"></div>
+  </section>
+  <section class="card wide">
+    <h2 id="evTitle">What happened</h2>
+    <div class="filters" id="filters"></div>
+    <div class="events" id="events"></div>
+  </section>
+</main>
+<script>
+const COLORS = ["#d6aa52", "#7fb6e0", "#e08a6f", "#9fd08a", "#c79be3", "#e3c35f", "#6fd0c4", "#e07fa8"];
+const KINDS = { moment: ["⭐", "Historic moments"], war: ["⚔️", "Wars"], treaty: ["📜", "Treaties"], pact: ["🤝", "Pacts"], deal: ["💰", "Deals"],
+                event: ["🌍", "World"], said: ["💬", "Said in public"], group: ["👥", "Groups"] };
+const H = { data: null, turn: 1, first: 1, last: 1, focus: null, graphWho: null, dir: "out", playing: null,
+            kinds: new Set(Object.keys(KINDS).filter((k) => k !== "said")), atEnd: true };
+const $ = (id) => document.getElementById(id);
+const NS = "http://www.w3.org/2000/svg";
+const svg = (tag, attrs, text) => { const x = document.createElementNS(NS, tag); for (const k in attrs) x.setAttribute(k, attrs[k]); if (text != null) x.textContent = text; return x; };
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+
+const civ = (id) => H.data.civs.find((c) => c.id === id);
+const color = (id) => { const c = civ(id); return c && c.human ? "#ece4d2" : COLORS[id % COLORS.length]; };
+const name = (id) => { const c = civ(id); return c ? (c.human ? `${c.leader} (you)` : c.leader) : `civ ${id}`; };
+function trustAt(from, to, turn) {   // last recorded value on or before the turn; null before they met
+  const pts = ((H.data.trust[from] || {})[to]) || [];
+  let v = null;
+  for (const [t, x] of pts) { if (t <= turn) v = x; else break; }
+  return v;
+}
+function trustColor(v) {   // red (-100) .. grey (0) .. green (+100)
+  const mix = (a, b, f) => a.map((x, i) => Math.round(x + (b[i] - x) * f));
+  const red = [224, 87, 79], grey = [139, 151, 169], green = [79, 184, 125];
+  const c = v < 0 ? mix(grey, red, Math.min(1, -v / 100)) : mix(grey, green, Math.min(1, v / 100));
+  return `rgb(${c.join(",")})`;
+}
+
+async function load() {
+  let d;
+  try { d = await (await fetch("/api/history")).json(); } catch (e) { $("note").textContent = "Can't reach Civ Council. Is it running?"; return; }
+  H.data = d;
+  const turns = [...d.events.map((e) => e.turn), ...Object.values(d.trust).flatMap((m) => Object.values(m).flatMap((p) => p.map((x) => x[0])))];
+  H.first = Math.max(1, Math.min(d.turn, ...turns));
+  H.last = d.turn;
+  const r = $("turn"); r.min = H.first; r.max = H.last;
+  if (H.atEnd || H.turn > H.last || H.turn < H.first) H.turn = H.last;
+  r.value = H.turn;
+  $("note").textContent = H.first > 1 ? `Records start on turn ${H.first}: earlier turns weren't kept.` : "";
+  if (H.graphWho == null) { const ai = d.civs.find((c) => !c.human); H.graphWho = ai ? ai.id : null; }
+  drawStrip(); drawWho(); drawFilters(); draw();
+}
+
+function draw() {
+  $("turnLabel").textContent = `Turn ${H.turn}`;
+  drawWeb(); drawGraph(); drawEvents();
+}
+
+// ---- the strip under the scrubber: what happened each turn -------------------------
+function drawStrip() {
+  const s = $("strip"); s.innerHTML = "";
+  const W = s.clientWidth || 800, Hh = 26, span = Math.max(1, H.last - H.first);
+  s.setAttribute("viewBox", `0 0 ${W} ${Hh}`);
+  const per = {};
+  for (const e of H.data.events) (per[e.turn] = per[e.turn] || []).push(e.kind);
+  const max = Math.max(1, ...Object.values(per).map((k) => k.length));
+  for (const [t, kinds] of Object.entries(per)) {
+    const x = (t - H.first) / span * (W - 4) + 2, h = 4 + 18 * Math.sqrt(kinds.length / max);
+    const c = kinds.includes("war") ? "#e0574f" : kinds.includes("pact") ? "#d6aa52" : kinds.includes("treaty") ? "#7fb6e0"
+      : kinds.includes("moment") ? "#6b5a3a" : "#3a4a63";
+    s.append(svg("rect", { x: x - 1, y: Hh - h, width: 2, height: h, fill: c, rx: 1 }));
+  }
+  const cx = (H.turn - H.first) / span * (W - 4) + 2;
+  s.append(svg("rect", { x: cx - 1, y: 0, width: 2, height: Hh, fill: "#ece4d2", opacity: 0.6, id: "stripCursor" }));
+  s.onclick = (ev) => { const r = s.getBoundingClientRect(); setTurn(Math.round(H.first + (ev.clientX - r.left - 2) / (r.width - 4) * span)); };
+}
+
+// ---- the trust web --------------------------------------------------------------
+function drawWeb() {
+  const s = $("web"); s.innerHTML = "";
+  const defs = svg("defs", {}); s.append(defs);
+  const civs = H.data.civs, n = civs.length, cx = 260, cy = 230, R = 175;
+  const pos = {};
+  civs.forEach((c, i) => { const a = -Math.PI / 2 + i * 2 * Math.PI / n; pos[c.id] = [cx + R * Math.cos(a), cy + R * Math.sin(a)]; });
+  let shown = 0;
+  for (const a of civs) for (const b of civs) {
+    if (a.id === b.id || a.human) continue;
+    const v = trustAt(String(a.id), String(b.id), H.turn);
+    if (v == null) continue;
+    shown++;
+    const focus = H.focus == null || H.focus === a.id || H.focus === b.id;
+    const [x1, y1] = pos[a.id], [x2, y2] = pos[b.id];
+    const dx = x2 - x1, dy = y2 - y1, len = Math.hypot(dx, dy) || 1, ux = dx / len, uy = dy / len;
+    const sx = x1 + ux * 30, sy = y1 + uy * 30, ex = x2 - ux * 34, ey = y2 - uy * 34;   // stop at the portraits
+    const bend = 26, mx = (sx + ex) / 2 - uy * bend, my = (sy + ey) / 2 + ux * bend;     // a→b and b→a curve apart
+    const col = trustColor(v), id = `m${a.id}_${b.id}`;
+    const m = svg("marker", { id, viewBox: "0 0 10 10", refX: 8, refY: 5, markerWidth: 5, markerHeight: 5, orient: "auto-start-reverse" });
+    m.append(svg("path", { d: "M0,0 L10,5 L0,10 z", fill: col })); defs.append(m);
+    s.append(svg("path", { d: `M${sx},${sy} Q${mx},${my} ${ex},${ey}`, fill: "none", stroke: col,
+                           "stroke-width": 1.2 + Math.abs(v) / 22, opacity: focus ? 0.95 : 0.12, "marker-end": `url(#${id})` }));
+    if (H.focus != null && focus) {
+      const lx = 0.25 * sx + 0.5 * mx + 0.25 * ex, ly = 0.25 * sy + 0.5 * my + 0.25 * ey;
+      s.append(svg("rect", { x: lx - 15, y: ly - 10, width: 30, height: 18, rx: 6, fill: "#0d141f", stroke: col }));
+      s.append(svg("text", { x: lx, y: ly + 3.5, fill: col, "font-size": 11, "text-anchor": "middle", "font-weight": 600 }, (v > 0 ? "+" : "") + v));
+    }
+  }
+  for (const c of civs) {
+    const [x, y] = pos[c.id], col = color(c.id), dim = H.focus != null && H.focus !== c.id;
+    const g = svg("g", { style: "cursor:pointer", opacity: dim ? 0.55 : 1 });
+    g.append(svg("circle", { cx: x, cy: y, r: 26, fill: "#141e2c", stroke: col, "stroke-width": H.focus === c.id ? 4 : 2.5 }));
+    g.append(svg("text", { x, y: y + 6, fill: col, "font-size": 18, "text-anchor": "middle", "font-weight": 700 }, c.leader[0]));
+    const top = y < cy - 40, ny = top ? y - 48 : y + 44;   // names above the top portraits, below the rest
+    g.append(svg("text", { x, y: ny, fill: "#ece4d2", "font-size": 13, "text-anchor": "middle" }, c.human ? "You" : c.leader.split(" ").slice(-1)[0]));
+    g.append(svg("text", { x, y: ny + 14, fill: "#8b97a9", "font-size": 11, "text-anchor": "middle" }, c.civ + (c.alive ? "" : " (gone)")));
+    g.addEventListener("click", () => { H.focus = H.focus === c.id ? null : c.id; if (H.focus != null && !c.human) H.graphWho = c.id; drawWho(); draw(); });
+    s.append(g);
+  }
+  if (!shown) s.append(svg("text", { x: cx, y: cy + 4, fill: "#8b97a9", "font-size": 14, "text-anchor": "middle" }, "Nobody has met anyone yet on this turn."));
+  $("webSub").textContent = H.focus == null ? "who trusts whom on this turn · tap a leader to focus" : `focused on ${name(H.focus)} · tap again to see everyone`;
+}
+
+// ---- trust over time ----------------------------------------------------------------
+function drawWho() {
+  const box = $("who"); box.innerHTML = "";
+  for (const c of H.data.civs) {
+    if (H.dir === "out" && c.human) continue;   // you don't have a trust meter
+    const b = el("button", H.graphWho === c.id ? "on" : "", c.human ? "You" : c.leader);
+    b.style.color = color(c.id);
+    b.onclick = () => { H.graphWho = c.id; drawWho(); drawGraph(); };
+    box.append(b);
+  }
+}
+function drawGraph() {
+  const s = $("graph"); s.innerHTML = "";
+  const leg = $("graphLegend"); leg.innerHTML = "";
+  const W = 560, Hh = 300, L = 34, R = 10, T = 10, B = 24, me = String(H.graphWho);
+  const x = (t) => L + (t - H.first) / Math.max(1, H.last - H.first) * (W - L - R);
+  const y = (v) => T + (100 - v) / 200 * (Hh - T - B);
+  for (const v of [100, 50, 0, -50, -100]) {
+    s.append(svg("line", { x1: L, x2: W - R, y1: y(v), y2: y(v), stroke: v === 0 ? "#3a4a63" : "#26364d", "stroke-dasharray": v ? "2 4" : "" }));
+    s.append(svg("text", { x: L - 6, y: y(v) + 4, fill: "#8b97a9", "font-size": 10, "text-anchor": "end" }, v));
+  }
+  const step = Math.max(1, Math.ceil((H.last - H.first) / 8 / 10) * 10);
+  for (let t = Math.ceil(H.first / step) * step; t <= H.last; t += step)
+    s.append(svg("text", { x: x(t), y: Hh - 6, fill: "#8b97a9", "font-size": 10, "text-anchor": "middle" }, t));
+  const lines = H.dir === "out"
+    ? Object.entries(H.data.trust[me] || {}).map(([to, pts]) => [Number(to), pts])
+    : Object.entries(H.data.trust).filter(([from, m]) => m[me]).map(([from, m]) => [Number(from), m[me]]);
+  $("graphSub").textContent = H.graphWho == null ? "" : H.dir === "out" ? `how much ${name(H.graphWho)} trusts each leader` : `how much each leader trusts ${name(H.graphWho)}`;
+  if (!lines.length) s.append(svg("text", { x: W / 2, y: Hh / 2, fill: "#8b97a9", "font-size": 13, "text-anchor": "middle" }, "No trust recorded yet."));
+  for (const [other, pts] of lines.sort((a, b) => a[0] - b[0])) {
+    const col = color(other);
+    let d = "", prev = null;
+    for (const [t, v] of pts) {   // a step line: trust holds until it changes; drawn only up to the playhead
+      if (t > H.turn) break;
+      d += prev == null ? `M${x(t)},${y(v)}` : ` H${x(t)} V${y(v)}`;
+      prev = v;
+    }
+    if (prev != null) {
+      d += ` H${x(H.turn)}`;
+      s.append(svg("path", { d, fill: "none", stroke: col, "stroke-width": 2, opacity: 0.9 }));
+      s.append(svg("circle", { cx: x(H.turn), cy: y(prev), r: 3.5, fill: col }));   // where it stands now
+    }
+    const now = H.dir === "out" ? trustAt(me, String(other), H.turn) : trustAt(String(other), me, H.turn);
+    const item = el("span"); item.style.color = col;
+    item.append(document.createTextNode(`■ ${name(other)} `), el("b", null, now == null ? "not met" : (now > 0 ? "+" : "") + now));
+    leg.append(item);
+  }
+  s.append(svg("line", { x1: x(H.turn), x2: x(H.turn), y1: T, y2: Hh - B, stroke: "#ece4d2", opacity: 0.5 }));
+  s.onclick = (ev) => { const r = s.getBoundingClientRect(); const px = (ev.clientX - r.left) / r.width * W;
+    setTurn(Math.round(H.first + (px - L) / (W - L - R) * (H.last - H.first))); };
+}
+
+// ---- events ------------------------------------------------------------------------
+function drawFilters() {
+  const box = $("filters"); box.innerHTML = "";
+  for (const [k, [icon, label]] of Object.entries(KINDS)) {
+    const b = el("button", H.kinds.has(k) ? "on" : "", `${icon} ${label}`);
+    b.onclick = () => { H.kinds.has(k) ? H.kinds.delete(k) : H.kinds.add(k); drawFilters(); drawEvents(); };
+    box.append(b);
+  }
+}
+function drawEvents() {
+  const box = $("events"); box.innerHTML = "";
+  const want = (e) => H.kinds.has(e.kind) && (H.focus == null || (e.civs || []).includes(H.focus));
+  // this turn first, then the story so far (newest first)
+  const upto = H.data.events.filter((e) => e.turn <= H.turn && want(e));
+  const now = upto.filter((e) => e.turn === H.turn);
+  $("evTitle").textContent = (H.focus == null ? "What happened" : `What happened with ${name(H.focus)}`) + ` · turn ${H.turn}`
+    + (now.length ? ` (${now.length} this turn)` : "");
+  if (!upto.length) { box.append(el("div", "empty", "Nothing recorded yet.")); return; }
+  if (!now.length) box.append(el("div", "empty", "Nothing on this turn. Earlier:"));
+  for (const e of upto.slice().reverse().slice(0, 300)) {
+    const row = el("div", "ev " + e.kind);
+    row.append(el("span", "t", "T" + e.turn), el("span", "k", (KINDS[e.kind] || ["•"])[0]));
+    const x = el("span", "x");
+    if ((e.kind === "said" || e.kind === "moment") && e.by != null)
+      x.append(el("span", "who", (e.kind === "moment" ? (civ(e.by) || {}).civ || name(e.by) : name(e.by)) + ": "));
+    x.append(document.createTextNode(e.text.replace(/^T\d+: /, "")));
+    row.append(x);
+    if (e.turn !== H.turn) row.style.opacity = 0.7;
+    box.append(row);
+  }
+}
+
+// ---- scrubbing and the timelapse ------------------------------------------------------
+function setTurn(t) {
+  H.turn = Math.max(H.first, Math.min(H.last, t));
+  H.atEnd = H.turn === H.last;
+  $("turn").value = H.turn;
+  const c = $("stripCursor");
+  if (c) { const W = $("strip").viewBox.baseVal.width; c.setAttribute("x", (H.turn - H.first) / Math.max(1, H.last - H.first) * (W - 4) + 1); }
+  draw();
+}
+function stop() { clearInterval(H.playing); H.playing = null; $("play").textContent = "▶"; $("play").title = "Play the timelapse"; }
+function play() {
+  if (H.playing) return stop();
+  if (H.turn >= H.last) setTurn(H.first);
+  $("play").textContent = "⏸"; $("play").title = "Pause";
+  H.playing = setInterval(() => { if (H.turn >= H.last) return stop(); setTurn(H.turn + 1); }, Number($("speed").value));
+}
+$("turn").addEventListener("input", (e) => { stop(); setTurn(Number(e.target.value)); });
+$("play").onclick = play;
+$("speed").onchange = () => { if (H.playing) { stop(); play(); } };
+for (const b of $("dir").querySelectorAll("button")) b.onclick = () => {
+  H.dir = b.dataset.dir; for (const x of $("dir").querySelectorAll("button")) x.classList.toggle("on", x === b);
+  if (H.dir === "out" && civ(H.graphWho) && civ(H.graphWho).human) { const ai = H.data.civs.find((c) => !c.human); H.graphWho = ai && ai.id; }
+  drawWho(); drawGraph();
+};
+document.addEventListener("keydown", (e) => {
+  if (e.target.tagName === "INPUT" && e.target.type !== "range") return;
+  if (e.key === "ArrowLeft") { stop(); setTurn(H.turn - 1); e.preventDefault(); }
+  if (e.key === "ArrowRight") { stop(); setTurn(H.turn + 1); e.preventDefault(); }
+  if (e.key === " ") { play(); e.preventDefault(); }
+});
+window.addEventListener("resize", () => H.data && drawStrip());
+load();
+setInterval(() => { if (!H.playing) load(); }, 20000);   // new turns appear as the game goes on
+</script>
+</body>
+</html>

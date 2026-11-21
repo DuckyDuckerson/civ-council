@@ -1,0 +1,1410 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Civ Council</title>
+<link rel="icon" href="data:,">
+<style>
+  :root {
+    --bg: #0d141f; --panel: #141e2c; --panel2: #1b2738; --line: #26364d;
+    --text: #ece4d2; --muted: #8b97a9; --gold: #d6aa52; --gold-dim: #8f733b;
+    --war: #e0574f; --ally: #4fb87d; --friend: #82c9a6; --peace: #8b97a9; --warn: #e3a33b;
+    --me: #3a3020; --serif: "Iowan Old Style", "Palatino Linotype", Palatino, Georgia, serif;
+    --sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Inter, Roboto, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text); font: 15px/1.45 var(--sans); }
+  button { font: inherit; color: inherit; cursor: pointer; }
+  .app { display: grid; grid-template-rows: auto 1fr; grid-template-columns: 270px 1fr; height: 100dvh; }
+
+  header { grid-column: 1 / -1; display: flex; align-items: center; gap: 14px; padding: 10px 16px;
+           background: linear-gradient(#182334, #121b29); border-bottom: 1px solid var(--line); }
+  .brand { font-family: var(--serif); font-size: 20px; letter-spacing: .5px; color: var(--gold); white-space: nowrap; }
+  .turn { font-family: var(--serif); color: var(--muted); white-space: nowrap; }
+  .turn b { color: var(--text); font-weight: 600; }
+  .status { flex: 1; color: var(--muted); font-size: 13px; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .status.on::before { content: ""; display: inline-block; width: 8px; height: 8px; border-radius: 50%;
+                       background: var(--gold); margin-right: 8px; animation: pulse 1s infinite ease-in-out; vertical-align: 1px; }
+  @keyframes pulse { 50% { opacity: .25; } }
+  .hbtn { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 10px; color: var(--muted); font-size: 13px; }
+  .hbtn.active { color: var(--gold); border-color: var(--gold-dim); }
+  a.hbtn { text-decoration: none; display: inline-flex; align-items: center; }
+  a.hbtn:hover { color: var(--text); }
+  .end { background: var(--gold); color: #1a1408; border: 0; border-radius: 8px; padding: 8px 16px; font-weight: 700; white-space: nowrap; }
+  .end:disabled { opacity: .5; cursor: wait; }
+
+  aside { background: var(--panel); border-right: 1px solid var(--line); overflow-y: auto; padding: 8px; }
+  .group { font-size: 11px; text-transform: uppercase; letter-spacing: 1.2px; color: var(--muted); padding: 12px 10px 6px; }
+  .chan { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; background: none; border: 0;
+          border-radius: 10px; padding: 8px 10px; margin-bottom: 2px; }
+  .chan:hover { background: var(--panel2); }
+  .chan.sel { background: var(--panel2); box-shadow: inset 3px 0 0 var(--gold); }
+  .chan .who { flex: 1; min-width: 0; }
+  .chan .nm { display: block; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .chan .sub { display: block; font-size: 12px; color: var(--muted); }
+  .badge { background: var(--gold); color: #1a1408; font-size: 11px; font-weight: 700; border-radius: 10px; padding: 1px 7px; }
+  .dead { opacity: .4; }
+  .av { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none;
+        font-family: var(--serif); font-weight: 700; font-size: 16px; color: #10161f; }
+  .icon { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; flex: none;
+          background: var(--panel2); border: 1px solid var(--line); font-size: 16px; }
+
+  .chip { font-size: 11px; padding: 1px 7px; border-radius: 10px; border: 1px solid currentColor; white-space: nowrap; }
+  .s-war { color: var(--war); } .s-allied { color: var(--ally); } .s-declared_friends { color: var(--friend); }
+  .s-peace { color: var(--peace); } .s-denounced { color: var(--warn); }
+
+  main { display: grid; grid-template-rows: auto 1fr auto auto auto; min-height: 0; }
+  .chead { display: flex; align-items: center; gap: 12px; padding: 12px 18px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  .chead .title { font-family: var(--serif); font-size: 18px; }
+  .chead .meta { color: var(--muted); font-size: 13px; }
+  .acts { margin-left: auto; display: flex; gap: 6px; flex-wrap: wrap; }
+  .act { background: var(--panel2); border: 1px solid var(--line); border-radius: 8px; padding: 5px 10px; font-size: 13px; }
+  .act.danger { color: var(--war); border-color: #5a2b2b; }
+  .act.arm { background: var(--war); color: #fff; border-color: var(--war); }
+  .act.active { color: var(--gold); border-color: var(--gold-dim); }
+
+  .msgs { overflow-y: auto; padding: 18px; display: flex; flex-direction: column; gap: 10px; }
+  .card.thought .from { font-size: 12px; color: var(--muted); margin-bottom: 4px; }
+  .card.thought .plan { font-size: 12px; color: var(--muted); margin-top: 6px; }
+  .empty { margin: auto; color: var(--muted); text-align: center; max-width: 360px; font-family: var(--serif); }
+  .b { max-width: min(620px, 82%); padding: 9px 13px; border-radius: 14px; background: var(--panel2); border: 1px solid var(--line); }
+  .b .from { font-size: 12px; font-weight: 700; color: var(--gold); margin-bottom: 2px; }
+  .b.mine { align-self: flex-end; background: var(--me); border-color: var(--gold-dim); }
+  .b.mine .from { color: var(--muted); }
+  .b .t { white-space: pre-wrap; overflow-wrap: anywhere; }
+  .line { align-self: center; color: var(--muted); font-size: 13px; text-align: center; max-width: 90%; }
+  .line.war { color: var(--war); } .line.treaty { color: var(--friend); } .line.error { color: var(--warn); }
+  .divider { align-self: stretch; display: flex; align-items: center; gap: 10px; color: var(--gold-dim);
+             font-family: var(--serif); font-size: 13px; margin: 6px 0; }
+  .divider::before, .divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+  .card { align-self: flex-start; border: 1px solid var(--gold-dim); background: #221c10; border-radius: 12px; padding: 12px 14px; max-width: 420px; }
+  .card .t { font-family: var(--serif); font-size: 16px; margin-bottom: 8px; }
+  .card .row { display: flex; gap: 8px; }
+  .yes { background: var(--ally); border: 0; color: #08140d; border-radius: 8px; padding: 6px 14px; font-weight: 700; }
+  .no { background: transparent; border: 1px solid var(--line); border-radius: 8px; padding: 6px 14px; }
+  .card .done { color: var(--muted); font-size: 13px; }
+  .newgroup { max-width: 460px; width: 100%; display: flex; flex-direction: column; gap: 10px; }
+  .gname { background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font: inherit; }
+  .picks { display: flex; flex-direction: column; gap: 4px; }
+  .pick { display: flex; align-items: center; gap: 10px; padding: 6px 8px; border-radius: 10px; cursor: pointer; }
+  .pick:hover { background: var(--panel2); }
+  .pick input { width: 18px; height: 18px; accent-color: var(--gold); }
+  .newgroup .yes { align-self: flex-start; }
+  .typing { align-self: flex-start; color: var(--muted); font-size: 13px; font-style: italic; }
+  .b { position: relative; }
+  .b .q { font-size: 12px; color: var(--muted); border-left: 2px solid var(--gold-dim); padding-left: 8px; margin-bottom: 4px;
+          overflow: hidden; text-overflow: ellipsis; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; }
+  .b .rbtn { position: absolute; top: 2px; right: 4px; background: none; border: 0; color: var(--muted); font-size: 13px;
+             padding: 2px 5px; opacity: 0; }
+  .b:hover .rbtn, .b .rbtn:focus { opacity: 1; }
+  @media (hover: none) { .b .rbtn { opacity: .55; } }
+  .b .rumor { font-size: 11px; color: var(--warn); margin-bottom: 3px; }
+  .newpill { position: sticky; bottom: 0; align-self: center; background: var(--gold); color: #1a1408; border: 0;
+             border-radius: 16px; padding: 5px 14px; font-weight: 700; font-size: 13px; box-shadow: 0 2px 10px #000a; }
+  .replybar { display: flex; gap: 8px; align-items: center; padding: 6px 16px; border-top: 1px solid var(--line);
+              background: var(--panel2); font-size: 13px; color: var(--muted); min-width: 0; }
+  .replybar[hidden] { display: none; }
+  .replybar span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .replybar b { color: var(--gold); }
+  .replybar button { margin-left: auto; background: none; border: 0; color: var(--muted); font-size: 16px; flex: none; }
+  .pop { position: fixed; top: 56px; right: 12px; width: min(380px, calc(100vw - 24px)); max-height: 70vh; overflow-y: auto;
+         background: var(--panel); border: 1px solid var(--gold-dim); border-radius: 12px; padding: 10px 12px; z-index: 20;
+         box-shadow: 0 8px 28px #000c; }
+  .pop[hidden] { display: none; }
+  .pop h3 { margin: 2px 0 8px; font-family: var(--serif); font-weight: 400; color: var(--gold); font-size: 17px; }
+  .offer { padding: 8px 0; border-bottom: 1px solid var(--line); }
+  .offer:last-child { border-bottom: 0; }
+  .offer .who { font-weight: 700; color: var(--gold); cursor: pointer; }
+  .offer .exp, .card .exp, .pop .hint { font-size: 12px; color: var(--muted); }
+  .offer .row { display: flex; gap: 8px; margin-top: 6px; }
+  .pref { display: flex; align-items: center; gap: 10px; padding: 6px 0; cursor: pointer; }
+  .pref input { width: 18px; height: 18px; accent-color: var(--gold); }
+  #voiceOpts { margin: 2px 0 8px 28px; }
+  #voiceOpts .vrow { display: flex; align-items: center; gap: 8px; padding: 3px 0; }
+  #voiceOpts .vrow span { flex: 0 0 9em; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #voiceOpts select { flex: 1; min-width: 0; background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+                      border-radius: 6px; padding: 3px 4px; font: inherit; font-size: 13px; }
+  #voiceOpts button { padding: 2px 9px; background: var(--panel2); color: var(--gold); border: 1px solid var(--line);
+                      border-radius: 6px; }
+  .pref[hidden] { display: none; }
+  .utable { width: 100%; border-collapse: collapse; font-size: 12px; margin-bottom: 10px; }
+  .utable th, .utable td { text-align: right; padding: 3px 6px; border-bottom: 1px solid var(--line); }
+  .utable th:first-child, .utable td:first-child { text-align: left; }
+  .utotal { margin: 2px 0 12px; }
+  .utotal .big { font-size: 22px; font-weight: 600; color: var(--gold); }
+  .utable th { color: var(--muted); font-weight: 600; }
+  .hbtn.hot { background: var(--gold); color: #1a1408; border-color: var(--gold); font-weight: 700; }
+  .hbtn[hidden] { display: none; }
+  .quietbtn { margin-left: auto; }
+  .diplo { width: 100%; display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 10px;
+           max-height: 46vh; overflow-y: auto; padding-top: 4px; }
+  .gbtns { display: flex; gap: 8px; flex-wrap: wrap; margin-left: auto; }
+  .ggoal { width: 100%; color: var(--gold); font-size: 13px; }
+  .grow { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; padding: 3px 0; }
+  .gpact { border-top: 1px solid var(--line); padding: 6px 0; }
+  .gpact:first-of-type { border-top: 0; }
+  .dsec .dim, .dim { color: var(--muted); }
+  .dsec .pos { color: var(--ally); } .dsec .neg { color: var(--war); }
+  button.sm { padding: 2px 8px; font-size: 12px; }
+  .dsec { background: var(--panel2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font-size: 13px; }
+  .dsec h5 { margin: 0 0 6px; font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); }
+  .dsec .kv { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
+  .dsec .kv span:first-child { color: var(--muted); }
+  .dsec .li { padding: 1px 0; }
+  .feel { display: flex; justify-content: space-between; gap: 8px; }
+  .feel.pos b { color: var(--ally); } .feel.neg b { color: var(--war); }
+  .feeltotal { margin-top: 4px; padding-top: 4px; border-top: 1px solid var(--line); font-weight: 700; }
+  .pactline { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; width: 100%; font-size: 13px; color: var(--muted); }
+  .pactline .pt { color: var(--gold); }
+  .card.news { max-width: 640px; align-self: stretch; }
+  .card.news .nh { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: var(--muted); margin: 8px 0 3px; }
+  .card.news .ni { font-size: 14px; padding: 1px 0; }
+  .card.pact .terms { font-size: 14px; margin-bottom: 8px; white-space: pre-wrap; }
+  .dfield { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px;
+            padding: 8px 10px; font: inherit; margin-top: 6px; }
+  textarea.dfield { resize: vertical; min-height: 64px; }
+  details.dpay { margin-top: 10px; } details.dpay summary { cursor: pointer; color: var(--muted); font-size: 13px; }
+
+  .dealbox { border-top: 1px solid var(--line); background: var(--panel); padding: 12px 16px; max-height: 58vh; overflow-y: auto; }
+  .dealbox[hidden] { display: none; }
+  .dealbox .dtitle { font-family: var(--serif); font-size: 17px; color: var(--gold); margin-bottom: 8px; }
+  .dcols { display: flex; gap: 16px; flex-wrap: wrap; }
+  .dcol { flex: 1 1 240px; min-width: 0; background: var(--panel2); border: 1px solid var(--line); border-radius: 12px; padding: 10px 12px; }
+  .dcol h4 { margin: 0 0 6px; font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
+  .ditem { display: flex; align-items: center; gap: 8px; padding: 4px 0; }
+  .ditem label { flex: 1; min-width: 0; }
+  .ditem .max { color: var(--muted); font-size: 12px; white-space: nowrap; }
+  .ditem input[type=number] { width: 84px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 8px; padding: 5px 8px; font: inherit; }
+  .ditem input[type=checkbox] { width: 18px; height: 18px; accent-color: var(--gold); flex: none; }
+  .dnone { color: var(--muted); font-size: 13px; }
+  .dnote { width: 100%; margin-top: 10px; background: var(--bg); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 8px 10px; font: inherit; resize: vertical; min-height: 40px; }
+  .drow { display: flex; gap: 8px; align-items: center; margin-top: 10px; flex-wrap: wrap; }
+  .derr { color: var(--warn); font-size: 13px; }
+  .act.deal { color: var(--gold); border-color: var(--gold-dim); }
+  .composer { display: flex; gap: 8px; padding: 12px 16px calc(12px + env(safe-area-inset-bottom)); border-top: 1px solid var(--line); background: var(--panel); }
+  .composer textarea { flex: 1; resize: none; background: var(--bg); color: var(--text); border: 1px solid var(--line);
+                       border-radius: 12px; padding: 10px 12px; font: inherit; height: 44px; max-height: 140px; }
+  .composer textarea:focus { outline: none; border-color: var(--gold-dim); }
+  .send { background: var(--gold); color: #1a1408; border: 0; border-radius: 12px; padding: 0 18px; font-weight: 700; }
+
+  .hbtn, .end { white-space: nowrap; flex: none; }
+  @media (max-width: 760px) {
+    .app { grid-template-columns: 1fr; grid-template-rows: auto auto 1fr; width: 100vw; overflow: hidden; }
+    header { gap: 8px; padding: 8px 10px; position: relative; }
+    .hbtn { padding: 6px 8px; }
+    #saveBtn { display: none; }
+    .spylabel { display: none; }
+    .end { padding: 8px 12px; margin-left: auto; }
+    .composer .send { padding: 0 14px; }
+    aside { display: flex; gap: 6px; overflow-x: auto; border-right: 0; border-bottom: 1px solid var(--line); padding: 8px; }
+    .group { display: none; }
+    .chan { width: auto; flex: none; padding: 6px 10px 6px 6px; }
+    .chan .sub { display: none; }
+    .brand { font-size: 17px; }
+    .status { display: none; }
+    header.busy .status { display: block; position: absolute; top: 46px; left: 0; right: 0; padding: 2px 16px; background: #121b29; }
+    .acts { margin-left: 0; }
+    .b { max-width: 90%; }
+  }
+</style>
+</head>
+<body>
+<div class="app">
+  <header id="hdr">
+    <div class="brand">Civ Council</div>
+    <div class="turn">Turn <b id="turn">–</b></div>
+    <div class="status" id="status"></div>
+    <button class="hbtn hot" id="offersBtn" hidden title="Offers waiting for your answer">📜 <span id="offersN">0</span></button>
+    <button class="hbtn" id="usageBtn" hidden title="How long the leaders took and how much Claude they used">⏱ <span id="usageN"></span></button>
+    <button class="hbtn" id="prefsBtn" title="Notifications and sound">🔔</button>
+    <a class="hbtn" id="historyBtn" href="/history" title="The story of the game so far: what happened each turn and how everyone's trust changed, with a timelapse">⏳<span class="spylabel"> History</span></a>
+    <button class="hbtn" id="spyBtn" title="Read the leaders' private messages to each other">🕵️<span class="spylabel"> Spy</span></button>
+    <button class="hbtn" id="saveBtn" title="Save every leader's memory">Save</button>
+    <button class="end" id="endBtn">End turn</button>
+  </header>
+  <aside id="side"></aside>
+  <main>
+    <div class="chead" id="chead"></div>
+    <div class="msgs" id="msgs"></div>
+    <div class="dealbox" id="dealbox" hidden></div>
+    <div class="replybar" id="replybar" hidden><span id="replytext"></span><button type="button" id="replyX" title="Cancel reply">×</button></div>
+    <form class="composer" id="composer">
+      <textarea id="input" placeholder="Write a message…" rows="1"></textarea>
+      <button class="send" type="submit">Send</button>
+    </form>
+  </main>
+</div>
+<div class="pop" id="offers" hidden></div>
+<div class="pop" id="usage" hidden></div>
+<div class="pop" id="prefs" hidden>
+  <h3>Notifications</h3>
+  <label class="pref"><input type="checkbox" id="prefNotify"> Pop-up notifications when a leader writes to you or sends an offer</label>
+  <label class="pref"><input type="checkbox" id="prefSound"> Play a sound</label>
+  <label class="pref" id="prefVoiceRow"><input type="checkbox" id="prefVoice"> Read leaders' messages to you aloud (each leader gets a voice)</label>
+  <div id="voiceOpts" hidden></div>
+  <label class="pref" id="prefCivRow" hidden><input type="checkbox" id="prefCiv"> Also show them in Civ's own notifications (in the game)</label>
+  <label class="pref" id="prefBlockRow" hidden><input type="checkbox" id="prefBlock"> Block Civ's own leader screen (use the 🏛️ Diplomacy panel here instead; first meetings and war declarations still show)</label>
+  <label class="pref" id="prefQuietRow" hidden><input type="checkbox" id="prefQuiet"> Hide Civ's own AI trade offers, requests and warnings in the game (first meetings and war declarations still show)</label>
+  <div class="hint" id="prefHint">Pop-ups show while this tab is in the background. Sound plays for new messages in chats you're not looking at.</div>
+</div>
+<script>
+const S = { state: null, entries: [], lastId: 0, chan: "world", unread: {}, armed: null, deal: null,
+            reply: null, newBelow: false, showQuiet: false };
+// Per-browser preferences (if storage is blocked, the defaults just apply for this visit).
+const P = (() => { try { return { notify: false, sound: true, voice: false, ...JSON.parse(localStorage.getItem("cc-prefs") || "{}") }; }
+                   catch (e) { return { notify: false, sound: true, voice: false }; } })();
+function savePrefs() { try { localStorage.setItem("cc-prefs", JSON.stringify(P)); } catch (e) {} }
+const COLORS = ["#d6aa52", "#7fb6e0", "#e08a6f", "#9fd08a", "#c79be3", "#e3c35f", "#6fd0c4", "#e07fa8"];
+const STANCE = { war: "At war", allied: "Allied", declared_friends: "Friends", peace: "At peace" };
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; };
+const key = (c) => String(c);
+
+function avatar(l) {
+  const a = el("div", "av", l.leader[0]);
+  a.style.background = COLORS[l.id % COLORS.length];
+  return a;
+}
+function leaderById(id) { return S.state && S.state.leaders.find((l) => l.id === id); }
+function groupById(id) { return S.state && S.state.groups.find((g) => g.id === id); }
+const inGroup = (g) => !!g && g.members.includes(S.state.me.id) && !g.closed;      // you can write there
+const wasInGroup = (g) => !!g && (g.ever || g.members).includes(S.state.me.id);    // it's in your list
+const hidden = (e) => e.secret && !(S.state && S.state.spy);                         // said where you weren't
+
+function newGroupForm() {
+  const f = el("form", "card newgroup");
+  f.append(el("div", "t", "Who's in this chat?"));
+  const name = el("input"); name.placeholder = "Name it (optional), e.g. Southern Pact"; name.className = "gname";
+  f.append(name);
+  const list = el("div", "picks");
+  for (const l of S.state.leaders) {
+    const lab = el("label", "pick");
+    const cb = el("input"); cb.type = "checkbox"; cb.value = l.id;
+    lab.append(cb, avatar(l), el("span", null, `${l.leader} of ${l.civ}`));
+    list.append(lab);
+  }
+  f.append(list);
+  const go = el("button", "yes", "Start group chat"); go.type = "submit";
+  const err = el("div", "done");
+  f.append(go, err);
+  f.onsubmit = async (ev) => {
+    ev.preventDefault();
+    const members = [...list.querySelectorAll("input:checked")].map((c) => +c.value);
+    if (members.length < 2) { err.textContent = "Pick at least two leaders (for one, use their private chat)."; return; }
+    const r = await api("/api/group", { name: name.value, members });
+    if (r.ok) { S.chan = r.group.id; await poll(); render(true); $("input").focus(); }
+    else err.textContent = r.error || "Couldn't create it.";
+  };
+  return f;
+}
+
+async function api(path, body) {
+  const r = await fetch(path, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body || {}) });
+  poll();
+  return r.json();
+}
+
+// What you've read, per game and channel, kept in this browser so a refresh doesn't make everything "unread".
+// Message ids survive server restarts (the chat is saved), so they still mean the same messages after one.
+const R = { key: null, ids: {}, fresh: false };
+function loadRead(game) {
+  if (R.key === "cc-read:" + game) return;
+  R.key = "cc-read:" + game;
+  try { const saved = localStorage.getItem(R.key); R.ids = saved ? JSON.parse(saved) : {}; R.fresh = !saved; }
+  catch (e) { R.ids = {}; R.fresh = true; }
+}
+function saveRead() { try { localStorage.setItem(R.key, JSON.stringify(R.ids)); } catch (e) {} }
+function markRead(ch) {
+  ch = key(ch);
+  let top = R.ids[ch] || 0;
+  for (const e of S.entries) if (key(e.channel) === ch && e.id > top) top = e.id;
+  if (top !== (R.ids[ch] || 0)) { R.ids[ch] = top; saveRead(); }
+  S.unread[ch] = 0;
+}
+const counts = (e, st) => !(e.secret && !st.spy) && e.kind !== "turn" && e.sender !== st.me.id && !(e.kind === "thought" && e.quiet && !S.showQuiet);
+
+async function poll() {
+  try {
+    const r = await fetch(`/api/state?since=${S.lastId}`);
+    const st = await r.json();
+    if (S.boot && st.boot !== S.boot) {   // the server restarted: its message ids start over
+      S.boot = st.boot; S.entries = []; S.lastId = 0; S.unread = {};
+      return poll();
+    }
+    S.boot = st.boot;
+    S.state = st;
+    loadRead(st.game);
+    const first = S.lastId === 0;   // the backlog on page load isn't news
+    const news = [];
+    for (const e of st.entries) {
+      if (e.id <= S.lastId) continue;   // overlapping polls can return the same entry twice
+      S.entries.push(e);
+      S.lastId = Math.max(S.lastId, e.id);
+      const ch = key(e.channel);
+      if (ch !== key(S.chan) && counts(e, st) && e.id > (R.ids[ch] || 0)) S.unread[ch] = (S.unread[ch] || 0) + 1;
+      if (!first && forMe(e, st)) news.push(e);
+    }
+    if (first && R.fresh) {   // first visit for this game in this browser: start with everything read
+      for (const e of S.entries) R.ids[key(e.channel)] = Math.max(R.ids[key(e.channel)] || 0, e.id);
+      S.unread = {}; R.fresh = false; saveRead();
+    }
+    markRead(S.chan);           // whatever is on screen counts as read
+    if (news.length) announce(news);
+    render(false);
+  } catch (err) {
+    $("status").textContent = "Can't reach the server. Is it still running?";
+  }
+}
+
+// ---- notifications --------------------------------------------------------------
+function forMe(e, st) {
+  if (e.sender === st.me.id || e.sender == null) return false;
+  const ch = key(e.channel);
+  if (ch === "spy" || ch === "minds" || e.secret) return false;
+  if (e.kind === "proposal" || e.kind === "membership") return true;
+  if (e.kind === "error") return typeof e.channel === "number";   // an offer to you that failed or expired
+  return e.kind === "message";
+}
+let AC = null;
+function chime() {
+  try {
+    AC = AC || new (window.AudioContext || window.webkitAudioContext)();
+    const t = AC.currentTime;
+    [660, 880].forEach((f, i) => {
+      const o = AC.createOscillator(), g = AC.createGain(), at = t + i * 0.13;
+      o.type = "sine"; o.frequency.value = f;
+      g.gain.setValueAtTime(0.0001, at); g.gain.exponentialRampToValueAtTime(0.18, at + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, at + 0.28);
+      o.connect(g).connect(AC.destination); o.start(at); o.stop(at + 0.3);
+    });
+  } catch (err) {}
+}
+document.addEventListener("pointerdown", () => { try { if (AC && AC.state === "suspended") AC.resume(); } catch (e) {} });
+// ---- voices: the browser's own speech, a clear voice per leader -------------------------
+// Browsers list every voice the computer has, including novelty ones (Bubbles, Zarvox...) and old
+// robotic ones. Leaders get the clearest voices in your language; you can pick one per leader.
+const ODD_VOICE = /^(Albert|Bad News|Bahh|Bells|Boing|Bubbles|Cellos|Deranged|Good News|Hysterical|Jester|Organ|Pipe Organ|Superstar|Trinoids|Whisper|Wobble|Zarvox|Eddy|Flo|Grandma|Grandpa|Reed|Rocko|Sandy|Shelley|Fred|Junior|Kathy|Ralph|Princess|Agnes|Bruce|Vicki|Victoria)\b/i;
+const GOOD_VOICE = /^(Samantha|Alex|Ava|Allison|Evan|Nathan|Zoe|Tom|Susan|Daniel|Serena|Oliver|Karen|Lee|Moira|Tessa|Rishi|Fiona|Aaron|Nicky|Joelle|Noelle)\b/i;
+function voiceScore(v) {
+  const id = `${v.name} ${v.voiceURI || ""}`;
+  if (ODD_VOICE.test(v.name) || /eloquence|speech\.synthesis\.voice\.(?!alex)/i.test(id)) return -1;
+  let score = 1;
+  if (/premium|enhanced|neural|natural|siri/i.test(id)) score += 50;
+  if (/google|online/i.test(id)) score += 30;
+  if (GOOD_VOICE.test(v.name)) score += 10;
+  if (/compact/i.test(id)) score -= 5;
+  if (v.lang && v.lang.replace("_", "-") === navigator.language) score += 3;
+  return score;
+}
+function goodVoices() {
+  const all = ("speechSynthesis" in window) ? speechSynthesis.getVoices() : [];
+  const lang = (navigator.language || "en").slice(0, 2);
+  const mine = all.filter((v) => v.lang && v.lang.startsWith(lang));
+  return (mine.length ? mine : all).map((v) => [voiceScore(v), v]).filter(([sc]) => sc >= 0)
+    .sort((a, b) => b[0] - a[0] || a[1].name.localeCompare(b[1].name)).map(([, v]) => v);
+}
+function voiceFor(id) {
+  const good = goodVoices();
+  const chosen = (P.voices || {})[id];
+  const pick = chosen && good.find((v) => v.voiceURI === chosen);
+  if (pick) return pick;
+  if (!good.length) return null;
+  // Spread the best few across leaders: the top voice for the first leader, the next for the second...
+  const best = good.slice(0, Math.max(4, ((S.state && S.state.leaders) || []).length));
+  const ids = ((S.state && S.state.leaders) || []).map((l) => l.id).sort((a, b) => a - b);
+  const at = ids.indexOf(id);
+  return best[(at >= 0 ? at : Math.abs(id)) % best.length];
+}
+// Leaders write like they text ("rn", "ty", "barbs"): say the words in full.
+const SAY = { rn: "right now", ty: "thank you", thx: "thanks", np: "no problem", tbh: "to be honest",
+  imo: "in my opinion", btw: "by the way", idk: "I don't know", ngl: "not gonna lie", pls: "please",
+  plz: "please", u: "you", ur: "your", w: "with", "w/": "with", barbs: "barbarians", barb: "barbarian",
+  lol: "", lmao: "", ok: "okay", q: "question", rq: "real quick", gg: "good game", diplo: "diplomacy",
+  cs: "city-state", bc: "because", cuz: "because", tho: "though", ppl: "people", msg: "message" };
+function sayable(text) {
+  return String(text || "")
+    .replace(/https?:\S+/g, "")
+    .replace(/\p{Extended_Pictographic}️?/gu, "")
+    .replace(/\bT(\d+)\b/g, "turn $1")
+    .replace(/(^|[\s(])(w\/|[a-z]+)(?=[\s.,!?;:)]|$)/gi, (m, pre, w) => {
+      const k = w.toLowerCase();
+      return k in SAY ? pre + SAY[k] : m;
+    })
+    .replace(/\s{2,}/g, " ").trim().slice(0, 500);
+}
+function speakAs(id, name, text) {
+  if (!("speechSynthesis" in window)) return;
+  const said = sayable(text);
+  if (!said) return;
+  const u = new SpeechSynthesisUtterance(name ? `${name}: ${said}` : said);
+  const v = voiceFor(Number(id) || 0);
+  if (v) { u.voice = v; u.lang = v.lang; }
+  u.rate = Number(P.rate) || 0.95;
+  u.pitch = 1;
+  try { speechSynthesis.speak(u); } catch (err) {}
+}
+function speak(e) {
+  if (!P.voice || e.kind !== "message") return;
+  speakAs(e.sender, e.sender_name, e.text);
+}
+const esc = (t) => String(t ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
+function renderVoices() {
+  const box = $("voiceOpts");
+  if (!box) return;
+  box.hidden = !P.voice;
+  if (!P.voice) return;
+  const good = goodVoices();
+  const leaders = ((S.state && S.state.leaders) || []).slice().sort((a, b) => a.id - b.id);
+  const opts = (sel) => `<option value="">Automatic</option>` + good.map((v) =>
+    `<option value="${esc(v.voiceURI)}"${v.voiceURI === sel ? " selected" : ""}>${esc(v.name)} (${esc(v.lang)})</option>`).join("");
+  const rate = String(Number(P.rate) || 0.95);
+  box.innerHTML =
+    `<div class="vrow"><span>Speed</span><select id="voiceRate">` +
+    [["0.8", "Slow"], ["0.95", "Normal"], ["1.1", "Fast"]].map(([v, t]) =>
+      `<option value="${v}"${v === rate ? " selected" : ""}>${t}</option>`).join("") + `</select></div>` +
+    (leaders.length ? leaders.map((l) =>
+      `<div class="vrow"><span>${esc(l.leader)}</span><select data-voice="${l.id}">${opts((P.voices || {})[l.id])}</select>` +
+      `<button type="button" data-try="${l.id}" title="Hear this voice">▶</button></div>`).join("")
+      : `<div class="vrow"><span>Try a voice</span><select data-voice="-1">${opts((P.voices || {})[-1])}</select>` +
+        `<button type="button" data-try="-1" title="Hear this voice">▶</button></div>` +
+        `<div class="hint">Each leader you meet gets a row here.</div>`) +
+    `<div class="hint">${good.length ? "" : "This browser has no voices for your language. "}Clearer voices: on a Mac, ` +
+    `System Settings → Accessibility → Spoken Content → System voice → Manage Voices, and download an ` +
+    `"Enhanced" or "Premium" voice (iPhone: Settings → Accessibility → Spoken Content → Voices). Then reload this page.</div>`;
+  $("voiceRate").onchange = (ev) => { P.rate = Number(ev.target.value); savePrefs(); };
+  for (const sel of box.querySelectorAll("select[data-voice]")) sel.onchange = () => {
+    P.voices = { ...(P.voices || {}), [sel.dataset.voice]: sel.value };
+    if (!sel.value) delete P.voices[sel.dataset.voice];
+    savePrefs();
+  };
+  for (const b of box.querySelectorAll("button[data-try]")) b.onclick = () => {
+    const id = Number(b.dataset.try), l = leaderById(id);
+    try { speechSynthesis.cancel(); } catch (err) {}
+    speakAs(id, l ? l.leader : "", "hey, quick heads up rn: barbs are near the border, ty for keeping an eye out.");
+  };
+}
+if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => renderVoices();
+
+function announce(news) {
+  news.forEach(speak);
+  const away = document.hidden || !document.hasFocus();
+  const elsewhere = news.filter((e) => away || key(e.channel) !== key(S.chan));
+  if (!elsewhere.length) return;
+  if (P.sound) chime();
+  if (P.notify && away && "Notification" in window && Notification.permission === "granted") {
+    const e = elsewhere[elsewhere.length - 1];
+    const title = e.kind === "proposal" ? `📜 Offer from ${e.sender_name}` : e.channel === "world" ? `📢 ${e.sender_name} (to everyone)`
+      : groupById(e.channel) ? `👥 ${groupById(e.channel).name}` : `✉️ ${e.sender_name}`;
+    const more = elsewhere.length > 1 ? ` (+${elsewhere.length - 1} more)` : "";
+    try {
+      const n = new Notification(title, { body: e.text.slice(0, 180) + more, tag: "civ-council" });
+      n.onclick = () => { window.focus(); S.chan = e.channel; markRead(e.channel); render(true); n.close(); };
+    } catch (err) {}
+  }
+}
+function setupPrefs() {
+  const notify = $("prefNotify"), sound = $("prefSound");
+  notify.checked = P.notify && "Notification" in window && Notification.permission === "granted";
+  sound.checked = P.sound;
+  notify.onchange = async () => {
+    if (notify.checked) {
+      if (!("Notification" in window) || !window.isSecureContext) {
+        notify.checked = false;
+        $("prefHint").textContent = "This browser only allows pop-ups on http://localhost (or https). Open Civ Council at localhost on this computer to use them.";
+        return;
+      }
+      const ok = (await Notification.requestPermission()) === "granted";
+      notify.checked = ok;
+      if (!ok) $("prefHint").textContent = "Notifications are blocked for this page in your browser's site settings.";
+    }
+    P.notify = notify.checked; savePrefs(); renderPrefsBtn();
+  };
+  sound.onchange = () => { P.sound = sound.checked; savePrefs(); if (P.sound) chime(); renderPrefsBtn(); };
+  const voice = $("prefVoice");
+  if (!("speechSynthesis" in window)) $("prefVoiceRow").hidden = true;
+  voice.checked = P.voice;
+  voice.onchange = () => {
+    P.voice = voice.checked; savePrefs(); renderVoices();
+    if (P.voice) speakAs(1, "Civ Council", "Leaders will read their messages to you aloud.");
+    else try { speechSynthesis.cancel(); } catch (err) {}
+  };
+  $("prefCiv").onchange = () => api("/api/prefs", { civ_notify: $("prefCiv").checked });
+  $("prefQuiet").onchange = () => api("/api/prefs", { quiet_civ_ai: $("prefQuiet").checked });
+  $("prefBlock").onchange = () => api("/api/prefs", { block_civ_screen: $("prefBlock").checked });
+  renderPrefsBtn();
+}
+function renderPrefsBtn() { $("prefsBtn").textContent = P.notify || P.sound ? "🔔" : "🔕"; }
+function togglePop(id) {
+  for (const other of ["offers", "prefs", "usage"]) if (other !== id) $(other).hidden = true;
+  $(id).hidden = !$(id).hidden;
+  if (id === "offers" && !$(id).hidden) renderOffers();
+  if (id === "usage" && !$(id).hidden) renderUsage();
+  if (id === "prefs" && !$(id).hidden) renderVoices();
+}
+const secs = (s) => s == null ? "–" : s >= 90 ? `${Math.floor(s / 60)}m ${Math.round(s % 60)}s` : `${Math.round(s)}s`;
+const kilo = (n) => n >= 1e6 ? `${(n / 1e6).toFixed(n >= 1e7 ? 0 : 1)}M`
+  : n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n);
+function renderUsage() {
+  const u = S.state.usage || { turns: [] };
+  const last = u.turns[0];
+  $("usageBtn").hidden = !last;
+  if (last) $("usageN").textContent = `${secs(last.wall_seconds ?? last.model_seconds)} · ${last.calls}`;
+  const pop = $("usage");
+  if (pop.hidden || !last) return;
+  pop.innerHTML = "";
+  pop.append(el("h3", null, "Usage"));
+  const table = (head, rows) => {
+    const t = el("table", "utable"), tr = el("tr");
+    head.forEach((h) => tr.append(el("th", null, h))); t.append(tr);
+    rows.forEach((r) => { const x = el("tr"); r.forEach((v) => x.append(el("td", null, String(v)))); t.append(x); });
+    pop.append(t);
+  };
+  const g = u.game || {};
+  if (g.calls) {   // the whole game so far, kept even when old calls are dropped from the log
+    const span = (g.last_turn ?? 0) - (g.first_turn ?? 0) + 1;
+    const box = el("div", "utotal");
+    box.append(el("div", "big", `≈ $${g.cost.toFixed(2)}`),
+               el("div", "hint", `Whole game so far (turns ${g.first_turn}–${g.last_turn}): ${g.calls} calls, `
+                 + `${kilo(g.tokens_in)} tokens in / ${kilo(g.tokens_out)} out, about $${(g.cost / span).toFixed(3)} a turn. `
+                 + `Last ${u.recent_turns} turns: ≈ $${u.recent_cost.toFixed(2)}.`));
+    pop.append(box);
+  }
+  table(["Turn", "Took", "Calls", "Tokens in/out", "≈ $"], u.turns.map((t) => [t.turn, secs(t.wall_seconds ?? t.model_seconds), t.calls
+    + " (" + Object.entries(t.models).map(([m, n]) => `${n} ${m}`).join(", ") + ")", `${kilo(t.tokens_in)} / ${kilo(t.tokens_out)}`, t.cost.toFixed(2)]));
+  pop.append(el("div", "hint", "Whole game, by what the calls were for:"));
+  table(["For", "Model", "Calls", "≈ $"], (u.rows || []).map((r) => [r.for, r.model, r.calls, r.cost.toFixed(2)]));
+  pop.append(el("div", "hint", "≈ $ is what the same calls would cost on Anthropic's API. On your subscription nothing is billed; "
+    + "they count toward your plan's usage limits, so use it to compare models and turns."));
+}
+document.addEventListener("pointerdown", (ev) => {   // click outside a popover closes it
+  for (const id of ["offers", "prefs", "usage"]) {
+    const pop = $(id), btn = $(id + "Btn");
+    if (!pop.hidden && !pop.contains(ev.target) && !btn.contains(ev.target)) pop.hidden = true;
+  }
+});
+
+// ---- offers tray ------------------------------------------------------------------
+function expiry(p) {
+  if (!p || p.expires_in == null) return "";
+  return p.expires_in <= 1 ? "expires at the end of this turn" : `expires in ${p.expires_in} turns`;
+}
+function renderOffers() {
+  const props = S.state.proposals;
+  const pacts = S.state.pacts.filter((p) => p.status === "offered" && (p.needs_you ?? !p.from_me));
+  const total = props.length + pacts.length;
+  $("offersBtn").hidden = !total;
+  $("offersN").textContent = total;
+  const pop = $("offers");
+  if (!total) { pop.hidden = true; return; }
+  if (pop.hidden) return;
+  pop.innerHTML = "";
+  pop.append(el("h3", null, total === 1 ? "1 offer waiting" : `${total} offers waiting`));
+  for (const p of pacts) {
+    const o = el("div", "offer");
+    const who = el("div", "who", p.group ? `${p.from} in ${p.with}` : p.with);
+    const go = p.group || p.with_id;
+    who.onclick = () => { S.chan = go; markRead(go); $("offers").hidden = true; render(true); };
+    o.append(who, el("div", null, p.group
+      ? `Group pact: ${p.title}. ${p.terms} (${p.length})${p.war_on ? "; joint war on " + p.war_on : ""}. Needs everyone: still waiting for ${p.waiting_for.join(", ")}.`
+      : `Pact: ${p.title}. ${p.terms} (${p.length})${p.payment ? "; " + p.payment : ""}`));
+    if (p.expires_in != null) o.append(el("div", "exp", p.expires_in <= 1 ? "expires at the end of this turn" : `expires in ${p.expires_in} turns`));
+    const row = el("div", "row");
+    const y = el("button", "yes", "Accept"); y.onclick = () => api("/api/pact_answer", { id: p.id, accept: true });
+    const n = el("button", "no", "Decline"); n.onclick = () => api("/api/pact_answer", { id: p.id, accept: false });
+    row.append(y, n); o.append(row); pop.append(o);
+  }
+  for (const p of props) {
+    const o = el("div", "offer");
+    const who = el("div", "who", p.from);
+    who.onclick = () => { S.chan = p.from_id; markRead(p.from_id); $("offers").hidden = true; render(true); };
+    o.append(who, el("div", null, p.label));
+    if (expiry(p)) o.append(el("div", "exp", expiry(p)));
+    const row = el("div", "row");
+    const y = el("button", "yes", "Accept"); y.onclick = () => api("/api/respond", { id: p.id, accept: true });
+    const n = el("button", "no", "Decline"); n.onclick = () => api("/api/respond", { id: p.id, accept: false });
+    row.append(y, n); if (p.kind === "propose_deal") row.append(counterBtn(p));
+    o.append(row); pop.append(o);
+  }
+}
+
+// A leader's deal you'd change: the deal screen opens with their terms filled in, to edit and send back.
+function counterBtn(p) {
+  const b = el("button", "no", "Counter");
+  b.title = "Change their terms and send it back (their offer is declined when yours goes out)";
+  b.onclick = () => {
+    const l = leaderById(p.from_id);
+    if (!l) return;
+    $("offers").hidden = true;
+    if (S.chan !== l.id) { S.chan = l.id; markRead(l.id); S.armed = null; setReply(null); render(true); }
+    openDeal(l, p);
+  };
+  return b;
+}
+
+// ---- replying ---------------------------------------------------------------------
+function setReply(e) {
+  S.reply = e ? { id: e.id, name: e.sender === S.state.me.id ? "You" : e.sender_name, text: e.text } : null;
+  const bar = $("replybar");
+  bar.hidden = !S.reply;
+  if (S.reply) {
+    const t = $("replytext"); t.innerHTML = "";
+    t.append(document.createTextNode("Replying to "), el("b", null, S.reply.name), document.createTextNode(": " + S.reply.text));
+    $("input").focus();
+  }
+}
+
+function render(newStuff) {
+  const st = S.state;
+  $("turn").textContent = st.turn;
+  const busy = st.busy || !!st.status;
+  $("status").textContent = st.status || (st.busy ? "Working…" : "");
+  $("status").classList.toggle("on", busy);
+  $("hdr").classList.toggle("busy", busy);
+  $("endBtn").disabled = st.busy || st.live;
+  $("endBtn").textContent = st.live ? (st.busy ? "Leaders thinking…" : "End turn in Civ 6") : st.busy ? "Waiting…" : "End turn";
+  $("endBtn").title = st.live ? "Turns end in the game; the leaders take theirs when your next turn starts." : "";
+  $("spyBtn").classList.toggle("active", st.spy);
+  $("saveBtn").hidden = !!st.autosave;   // a real game saves by itself
+  const g0 = groupById(S.chan);
+  $("composer").style.display = S.chan === "spy" || S.chan === "minds" || S.chan === "new" || S.chan === "news"
+    || (g0 && !inGroup(g0)) ? "none" : "";
+  $("input").placeholder = S.chan === "world" ? "Speak to every leader…"
+    : groupById(S.chan) ? "Write to the group…" : "Write a private message…";
+  renderSide();
+  renderHead();
+  renderOffers();
+  renderUsage();
+  if (st.civ_notify != null) {   // real game only: a server-side switch, shared by every browser
+    $("prefCivRow").hidden = false;
+    if (document.activeElement !== $("prefCiv")) $("prefCiv").checked = st.civ_notify;
+  }
+  if (st.block_civ_screen != null) {
+    $("prefBlockRow").hidden = false;
+    if (document.activeElement !== $("prefBlock")) $("prefBlock").checked = st.block_civ_screen;
+  }
+  if (st.quiet_civ_ai != null) {
+    $("prefQuietRow").hidden = false;
+    if (document.activeElement !== $("prefQuiet")) $("prefQuiet").checked = st.quiet_civ_ai;
+  }
+  const unread = Object.entries(S.unread).filter(([k]) => k !== "spy" && k !== "minds").reduce((n, [, v]) => n + (v || 0), 0);
+  document.title = unread ? `(${unread}) Civ Council` : "Civ Council";
+  renderMsgs(newStuff);
+}
+
+function chanButton(ch, iconOrAv, name, sub, extraCls) {
+  const b = el("button", "chan" + (key(S.chan) === key(ch) ? " sel" : "") + (extraCls || ""));
+  b.append(iconOrAv);
+  const who = el("span", "who");
+  who.append(el("span", "nm", name));
+  if (sub) who.append(sub);
+  b.append(who);
+  const n = S.unread[key(ch)];
+  if (n) b.append(el("span", "badge", n));
+  b.onclick = () => { S.chan = ch; markRead(ch); S.armed = null; S.newBelow = false; closeDeal(); setReply(null); render(true); $("input").focus(); };
+  return b;
+}
+
+function renderSide() {
+  const side = $("side"); side.innerHTML = "";
+  side.append(el("div", "group", "Channels"));
+  side.append(chanButton("world", el("div", "icon", "🌍"), "World", el("span", "sub", "Everyone hears this")));
+  side.append(chanButton("news", el("div", "icon", "📰"), "World News", el("span", "sub", "What happened each turn")));
+  if (S.state.spy) {   // cheats: only with Spy turned on
+    side.append(chanButton("spy", el("div", "icon", "🕵️"), "Spy", el("span", "sub", "Their private messages")));
+    side.append(chanButton("minds", el("div", "icon", "🧠"), "Minds", el("span", "sub", "What each leader is thinking")));
+  }
+  side.append(el("div", "group", "Group chats"));
+  const groupSub = (g) => el("span", "sub", g.closed ? "Closed" : !inGroup(g) && wasInGroup(g) ? "You left"
+    : g.member_names.filter((n) => n !== S.state.me.leader).join(", "));
+  for (const g of S.state.groups.filter(wasInGroup)) side.append(chanButton(g.id, el("div", "icon", "👥"), g.name, groupSub(g)));
+  side.append(chanButton("new", el("div", "icon", "＋"), "New group chat", el("span", "sub", "Pick who's in it")));
+  const secret = S.state.spy ? S.state.groups.filter((g) => !wasInGroup(g)) : [];
+  if (secret.length) {   // cheats: groups the leaders started without you
+    side.append(el("div", "group", "Secret group chats"));
+    for (const g of secret) side.append(chanButton(g.id, el("div", "icon", "🕵️"), g.name, groupSub(g)));
+  }
+  side.append(el("div", "group", "Leaders"));
+  for (const l of S.state.leaders) {
+    const sub = el("span", "sub");
+    const chip = el("span", "chip s-" + (l.they_denounced_you ? "denounced" : l.stance_with_you),
+                    l.they_denounced_you ? "Denounced you" : STANCE[l.stance_with_you]);
+    sub.append(chip, document.createTextNode(" " + l.civ));
+    side.append(chanButton(l.id, avatar(l), l.leader, sub));
+  }
+  for (const d of S.state.eliminated) side.append(chanButton(d.id, el("div", "icon", "💀"), d.leader, el("span", "sub", "Eliminated"), " dead"));
+}
+
+function actionButtons(l) {
+  const box = el("div", "acts");
+  const add = (label, type, danger) => {
+    const b = el("button", "act" + (danger ? " danger" : ""), label);
+    const armedHere = S.armed === type + l.id;
+    if (armedHere) { b.classList.add("arm"); b.textContent = "Confirm: " + label.toLowerCase() + "?"; }
+    b.onclick = () => {
+      if (danger && !armedHere) { S.armed = type + l.id; renderHead(); setTimeout(() => { if (S.armed === type + l.id) { S.armed = null; renderHead(); } }, 3500); return; }
+      S.armed = null; api("/api/act", { type, target: l.id });
+    };
+    box.append(b);
+  };
+  const s = l.stance_with_you;
+  {
+    const d = el("button", "act deal", S.deal === l.id ? "Close deal" : s === "war" ? "🕊️ Peace terms" : "🤝 Propose a deal");
+    d.onclick = () => (S.deal === l.id ? closeDeal() : openDeal(l));
+    box.append(d);
+  }
+  const db = el("button", "act" + (S.diplo === l.id ? " active" : ""), S.diplo === l.id ? "Hide diplomacy" : "🏛️ Diplomacy");
+  db.title = "What Civ's own leader screen shows: how they feel about you, their empire, friends and enemies";
+  db.onclick = () => { S.diplo = S.diplo === l.id ? null : l.id; renderHead(); };
+  box.append(db);
+  const pb = el("button", "act deal", S.pactFor === l.id ? "Close pact" : "📜 Propose a pact");
+  pb.title = "An agreement in words: vassal, non-aggression, borders, a joint or proxy war...";
+  pb.onclick = () => (S.pactFor === l.id ? closeDeal() : openPact(l));
+  box.append(pb);
+  if (s === "war") add("Offer peace", "make_peace");
+  if (s === "peace") add("Offer friendship", "propose_friendship");
+  if (s === "peace" || s === "declared_friends") add("Offer alliance", "propose_alliance");
+  if (s === "declared_friends" || s === "allied") add(s === "allied" ? "Break alliance" : "End friendship", "break_alliance", true);
+  if (!l.you_denounced_them) add("Denounce", "denounce", true);
+  if (s === "peace" || s === "declared_friends") add("Declare war", "declare_war", true);
+  return box;
+}
+
+// The page refreshes every few seconds. The header is drawn aside and only swapped in when it changed, so the
+// trust charts and Diplomacy panel don't jump back to the top (or stop a swipe) while you scroll them.
+function renderHead() {
+  const head = $("chead"), fresh = el("div");
+  drawHead(fresh);
+  const view = `${S.chan}|${S.trustOpen}|${S.diplo}|${S.groupInfo}`;
+  if (fresh.innerHTML === head.innerHTML && S.headView === view) return;
+  const box = head.querySelector(".diplo"), top = box && S.headView === view ? box.scrollTop : 0;
+  head.replaceChildren(...fresh.childNodes);
+  S.headView = view;
+  const again = head.querySelector(".diplo");
+  if (again && top) again.scrollTop = top;
+}
+function drawHead(h) {
+  if (S.chan === "world") {
+    h.append(el("div", "icon", "🌍"));
+    const t = el("div"); t.append(el("div", "title", "World"));
+    const wars = S.state.wars.length ? "Wars: " + S.state.wars.join(", ") : "No wars";
+    const al = S.state.alliances.length ? " · Alliances: " + S.state.alliances.join(", ") : "";
+    t.append(el("div", "meta", wars + al)); h.append(t); return;
+  }
+  if (S.chan === "new") {
+    h.append(el("div", "icon", "＋"), el("div", "title", "New group chat")); return;
+  }
+  const grp = groupById(S.chan);
+  if (grp) {
+    h.append(el("div", "icon", "👥"));
+    const t = el("div"); t.append(el("div", "title", grp.name));
+    const who = grp.member_names.filter((n) => n !== S.state.me.leader).join(", ");
+    const by = grp.started_by == null || grp.started_by === S.state.me.id ? "" : `Started by ${(leaderById(grp.started_by) || {}).leader || "a leader"} · `;
+    t.append(el("div", "meta", grp.closed ? "This group chat is closed."
+      : inGroup(grp) ? by + "Only its members can read this: " + who
+      : wasInGroup(grp) ? "You left this group chat. " + who + " can still talk here without you."
+      : "🕵️ Secret: " + by + who + ". You're seeing it because Spy is on."));
+    h.append(t);
+    if (!grp.closed && (inGroup(grp) || S.state.spy)) {
+      const row = el("div", "gbtns");
+      const info = el("button", "act" + (S.groupInfo === grp.id ? " active" : ""), S.groupInfo === grp.id ? "Hide group info" : "ℹ️ Group info");
+      info.title = "Members, how they get along, the group's goal, its pacts and votes";
+      info.onclick = () => { S.groupInfo = S.groupInfo === grp.id ? null : grp.id; renderHead(); };
+      row.append(info);
+      if (inGroup(grp)) {
+        const pact = el("button", "act", "📜 Group pact"); pact.title = "A pact for everyone here: it starts only once every member accepts";
+        pact.onclick = () => openGroupPact(grp);
+        const inv = el("button", "act", "＋ Invite"); inv.title = "Add a leader you've met to this group chat";
+        inv.onclick = () => openGroupInvite(grp);
+        const b = el("button", "act", "Leave");
+        b.title = "Leave this group chat: you won't see what's said after you go (unless Spy is on). Your group pacts still bind you.";
+        b.onclick = async () => { if (confirm(`Leave "${grp.name}"?`)) { await api("/api/group_leave", { id: grp.id }); } };
+        row.append(pact, inv, b);
+      }
+      h.append(row);
+      if (grp.goal_text && S.groupInfo !== grp.id) h.append(el("div", "ggoal", `🎯 Goal: ${grp.goal_text}` + (grp.goal_by ? ` (set by ${grp.goal_by})` : "")));
+      if (S.groupInfo === grp.id) h.append(groupPanel(grp));
+    }
+    return;
+  }
+  if (S.chan === "news") {
+    h.append(el("div", "icon", "📰"));
+    const t = el("div"); t.append(el("div", "title", "World News"));
+    t.append(el("div", "meta", "At the start of each turn: what happened that you'd know about, and what leaders said in public."));
+    h.append(t); return;
+  }
+  if (S.chan === "minds") {
+    h.append(el("div", "icon", "🧠"));
+    const t = el("div"); t.append(el("div", "title", "Minds"));
+    t.append(el("div", "meta", "Each leader's private reasoning and plans, and which model did the thinking. Nobody else sees this.")); h.append(t);
+    const n = S.entries.filter((e) => e.kind === "thought" && e.quiet).length;
+    const q = el("button", "act quietbtn", S.showQuiet ? "Hide quiet turns" : `Show quiet turns${n ? ` (${n})` : ""}`);
+    q.title = "Turns where a leader said nothing and did nothing";
+    q.onclick = () => { S.showQuiet = !S.showQuiet; renderHead(); renderMsgs(true); };
+    h.append(q); return;
+  }
+  if (S.chan === "spy") {
+    h.append(el("div", "icon", "🕵️"));
+    const t = el("div"); t.append(el("div", "title", "Spy network"));
+    t.append(el("div", "meta", "What the leaders say to each other in private. They don't know you're reading.")); h.append(t);
+    const b = el("button", "act quietbtn" + (S.trustOpen ? " active" : ""), S.trustOpen ? "Hide trust" : "📈 Trust over time");
+    b.title = "How much each leader trusts the others and you, from their own memories";
+    b.onclick = () => { S.trustOpen = !S.trustOpen; renderHead(); };
+    h.append(b);
+    if (S.trustOpen) h.append(trustCharts());
+    return;
+  }
+  const l = leaderById(S.chan);
+  if (!l) { const d = S.state.eliminated.find((x) => x.id === S.chan); h.append(el("div", "icon", "💀"), el("div", "title", d ? d.leader + " (eliminated)" : "")); return; }
+  h.append(avatar(l));
+  const t = el("div");
+  t.append(el("div", "title", `${l.leader} of ${l.civ}`));
+  t.append(el("div", "meta", `${STANCE[l.stance_with_you]} · ${l.cities} ${l.cities === 1 ? "city" : "cities"} · military ${l.military} · ${l.model}`));
+  h.append(t, actionButtons(l));
+  if (S.diplo === l.id) h.append(diplomacyPanel(l));
+  const mine = S.state.pacts.filter((p) => p.with_id === l.id && p.status === "active");
+  if (mine.length) {
+    const line = el("div", "pactline");
+    line.append(document.createTextNode("Pacts:"));
+    for (const p of mine) {
+      line.append(el("span", "pt", `${p.title}${p.turns_left != null ? ` (${p.turns_left} turns left)` : " (open-ended)"}`));
+      const armedHere = S.armed === "pact" + p.id;
+      const end = el("button", "act danger" + (armedHere ? " arm" : ""), armedHere ? "Confirm: end it?" : "End");
+      end.title = p.turns_left != null ? "Ending it early breaks it, and they'll remember" : "End this pact";
+      end.onclick = () => {
+        if (!armedHere) { S.armed = "pact" + p.id; renderHead(); setTimeout(() => { if (S.armed === "pact" + p.id) { S.armed = null; renderHead(); } }, 3500); return; }
+        S.armed = null; api("/api/pact_end", { id: p.id });
+      };
+      line.append(end);
+    }
+    h.append(line);
+  }
+}
+
+// ---- group chats: info panel and forms ------------------------------------------------
+const STANCE_WORD = { war: "⚔️ at war", allied: "🤝 allied", declared_friends: "🙂 friends", peace: "at peace", unknown: "? (you haven't met both)" };
+function groupPanel(grp) {
+  const wrap = el("div", "diplo");
+  const sec = (title) => { const x = el("div", "dsec"); x.append(el("h5", null, title)); wrap.append(x); return x; };
+  const me = inGroup(grp);
+  // goal
+  const goal = sec("Goal");
+  goal.append(el("div", "li", grp.goal_text ? `${grp.goal_text} (set by ${grp.goal_by})` : "No goal set yet."));
+  if (grp.can_set_goal) { const b = el("button", "act", grp.goal_text ? "Change goal" : "Set a goal"); b.onclick = () => openGroupGoal(grp); goal.append(b); }
+  else if (me) goal.append(el("div", "li dim", "Only the founder sets it; suggest one in the chat."));
+  // members and votes
+  const mem = sec("Members");
+  for (let i = 0; i < grp.members.length; i++) {
+    const id = grp.members[i], name = id === S.state.me.id ? "You" : grp.member_names[i];
+    const row = el("div", "grow"); row.append(el("span", null, name + (id === grp.started_by ? " (founder)" : "")));
+    const vote = (grp.vote_list || []).find((v) => v.member === id);
+    if (vote) {
+      row.append(el("span", "dim", ` vote to remove: ${vote.yes} yes, ${vote.no} no (${vote.needed} needed)`));
+      if (me && id !== S.state.me.id) {
+        const y = el("button", "yes sm", "Remove"), n = el("button", "no sm", "Keep");
+        if (vote.your_vote === "yes") y.disabled = true; if (vote.your_vote === "no") n.disabled = true;
+        y.onclick = () => api("/api/group_vote", { id: grp.id, member: id, yes: true });
+        n.onclick = () => api("/api/group_vote", { id: grp.id, member: id, yes: false });
+        row.append(y, n);
+      }
+    } else if (me && id !== S.state.me.id && grp.members.length > 2) {
+      const k = el("button", "no sm", "Vote out");
+      k.title = `Call a vote to remove ${name}: a majority of the other members decides`;
+      k.onclick = () => { if (confirm(`Call a vote to remove ${name} from "${grp.name}"?`)) api("/api/group_vote", { id: grp.id, member: id, yes: true }); };
+      row.append(k);
+    }
+    mem.append(row);
+  }
+  // how they get along
+  const rel = sec("How they get along");
+  if (!(grp.relations || []).length) rel.append(el("div", "li", "Nothing to show."));
+  for (const r of grp.relations || []) {
+    const x = el("div", "li " + (r.stance === "war" ? "neg" : r.stance === "allied" || r.stance === "declared_friends" ? "pos" : ""));
+    x.textContent = `${r.a} & ${r.b}: ${STANCE_WORD[r.stance] || r.stance}`; rel.append(x);
+  }
+  // pacts
+  const pc = sec("Group pacts");
+  if (!(grp.pacts || []).length) pc.append(el("div", "li", me ? "None yet. Use 📜 Group pact to propose one." : "None."));
+  for (const p of grp.pacts || []) {
+    const box = el("div", "gpact");
+    box.append(el("div", "li", `${p.id}: ${p.title}. ${p.terms} (${p.length})` + (p.war_on ? ` · joint war on ${p.war_on}` : "")));
+    if (p.status === "offered") box.append(el("div", "li dim", `Proposed by ${p.from}; waiting for ${p.waiting_for.join(", ")}`));
+    else box.append(el("div", "li dim", `In force for ${p.binds.join(", ")}` + (p.turns_left != null ? ` · ${p.turns_left} turns left` : "")
+      + (p.walked_out.length ? ` · walked out: ${p.walked_out.join(", ")}` : "")));
+    const row = el("div", "row");
+    if (p.needs_you) {
+      const y = el("button", "yes sm", "Accept"); y.onclick = () => api("/api/pact_answer", { id: p.id, accept: true });
+      const n = el("button", "no sm", "Decline"); n.onclick = () => api("/api/pact_answer", { id: p.id, accept: false });
+      row.append(y, n);
+    } else if (p.status === "offered" && p.from_me) {
+      const w = el("button", "no sm", "Withdraw"); w.onclick = () => api("/api/pact_end", { id: p.id }); row.append(w);
+    } else if (p.status === "active" && p.mine) {
+      const l = el("button", "no sm", "Leave pact");
+      l.title = p.turns_left != null ? "Walking out before it ends is breaking it: the whole group sees" : "Walk out of this pact";
+      l.onclick = () => { if (confirm(p.turns_left != null ? `Break "${p.title}" with ${p.turns_left} turns left? Everyone in the group will know.` : `Leave "${p.title}"?`)) api("/api/pact_end", { id: p.id }); };
+      row.append(l);
+    }
+    if (row.childNodes.length) box.append(row);
+    pc.append(box);
+  }
+  return wrap;
+}
+
+function groupForm(title) {
+  S.deal = null; S.pactFor = null;
+  const box = $("dealbox"); box.hidden = false; box.innerHTML = "";
+  box.append(el("div", "dtitle", title));
+  const row = el("div", "drow"), err = el("span", "derr"), cancel = el("button", "no", "Cancel");
+  cancel.onclick = closeDeal;
+  return { box, row, err, cancel };
+}
+
+function openGroupPact(grp) {
+  const f = groupForm(`Group pact in ${grp.name}`);
+  f.box.append(el("div", "dnone", `It binds everyone here (${grp.member_names.join(", ")}) and starts only once every one of them accepts. One no and it's off. Civ can't enforce it; the members keep it or break it, and the whole group sees.`));
+  const title = el("input", "dfield"); title.placeholder = "Short name, e.g. Southern Defense League";
+  const terms = el("textarea", "dfield"); terms.placeholder = "Terms: what every member agrees to. E.g. no wars between us, we warn each other of attacks, nobody sells iron to Rome.";
+  const turns = el("input", "dfield"); turns.type = "number"; turns.min = 1; turns.placeholder = "How many turns (leave empty for open-ended)";
+  const war = el("select", "dfield");
+  war.append(new Option("No joint war", ""));
+  for (const l of S.state.leaders) if (!grp.members.includes(l.id)) war.append(new Option(`Joint war on ${l.leader} (every member declares war once all accept)`, l.id));
+  const note = el("textarea", "dnote"); note.placeholder = "Add a message to the group (optional): why everyone should sign…";
+  f.box.append(title, terms, turns, war, note);
+  const go = el("button", "yes", "Propose to the group");
+  go.onclick = async () => {
+    if (!terms.value.trim()) { f.err.textContent = "Write the terms: what every member agrees to."; return; }
+    go.disabled = true; f.err.textContent = "";
+    const r = await api("/api/group_pact", { group: grp.id, title: title.value, terms: terms.value, turns: turns.value || null,
+                                              war_on: war.value === "" ? null : Number(war.value), note: note.value });
+    go.disabled = false;
+    if (r.ok) closeDeal(); else f.err.textContent = r.error || "That pact didn't go through.";
+  };
+  f.row.append(go, f.cancel, f.err); f.box.append(f.row); title.focus();
+}
+
+function openGroupGoal(grp) {
+  const f = groupForm(`Goal for ${grp.name}`);
+  f.box.append(el("div", "dnone", "Every member sees it in their briefing. Leave it empty to clear it."));
+  const text = el("input", "dfield"); text.placeholder = "e.g. Keep Rome out of the south"; text.value = grp.goal_text || "";
+  f.box.append(text);
+  const go = el("button", "yes", "Set goal");
+  go.onclick = async () => { const r = await api("/api/group_goal", { id: grp.id, text: text.value }); if (r.ok) closeDeal(); else f.err.textContent = r.error || "Couldn't set it."; };
+  f.row.append(go, f.cancel, f.err); f.box.append(f.row); text.focus();
+}
+
+function openGroupInvite(grp) {
+  const f = groupForm(`Invite to ${grp.name}`);
+  const pick = el("select", "dfield");
+  const out = S.state.leaders.filter((l) => !grp.members.includes(l.id));
+  for (const l of out) pick.append(new Option(`${l.leader} (${l.civ})`, l.id));
+  if (!out.length) f.box.append(el("div", "dnone", "Everyone you've met is already in this group."));
+  else f.box.append(el("div", "dnone", "They'll see what's said from now on, not what came before. Existing group pacts don't bind them."), pick);
+  const go = el("button", "yes", "Invite"); go.disabled = !out.length;
+  go.onclick = async () => { const r = await api("/api/group_invite", { id: grp.id, member: Number(pick.value) }); if (r.ok) closeDeal(); else f.err.textContent = r.error || "Couldn't invite them."; };
+  f.row.append(go, f.cancel, f.err); f.box.append(f.row);
+}
+
+function diplomacyPanel(l) {
+  const d = l.diplomacy || {}, wrap = el("div", "diplo");
+  const sec = (title) => { const x = el("div", "dsec"); x.append(el("h5", null, title)); wrap.append(x); return x; };
+  const kv = (box, k, v) => { if (v == null || v === "" || (Array.isArray(v) && !v.length)) return;
+    const r = el("div", "kv"); r.append(el("span", null, k), el("span", null, Array.isArray(v) ? v.join(", ") : String(v))); box.append(r); };
+  const list = (box, items) => (items || []).forEach((t) => box.append(el("div", "li", "• " + t)));
+  const fmt = (o) => o && typeof o === "object" ? Object.entries(o).map(([k, v]) => `${v} ${k}`).join(", ") : o;
+  // how they see you (Civ's own reasons, as on its leader screen)
+  const f = sec("How they feel about you");
+  if (d.their_feelings_about_you && d.their_feelings_about_you.length) {
+    for (const r of d.their_feelings_about_you) {
+      const row = el("div", "feel " + (r.score > 0 ? "pos" : r.score < 0 ? "neg" : ""));
+      row.append(el("span", null, r.reason), el("b", null, (r.score > 0 ? "+" : "") + r.score)); f.append(row);
+    }
+    const t = el("div", "feel feeltotal " + (d.feelings_total > 0 ? "pos" : d.feelings_total < 0 ? "neg" : ""));
+    t.append(el("span", null, "Total"), el("b", null, (d.feelings_total > 0 ? "+" : "") + d.feelings_total)); f.append(t);
+  } else f.append(el("div", "li", "No reasons on record yet."));
+  // relationship
+  const r = sec("Your relationship");
+  kv(r, "Stance", STANCE[l.stance_with_you] + (l.they_denounced_you ? " (they denounced you)" : "") + (l.you_denounced_them ? " (you denounced them)" : ""));
+  kv(r, "Friendship ends in", d.friendship_ends_in_turns != null ? d.friendship_ends_in_turns + " turns" : null);
+  kv(r, "Alliance ends in", d.alliance_ends_in_turns != null ? d.alliance_ends_in_turns + " turns" : null);
+  kv(r, "Grievances", d.grievances);
+  kv(r, "Trade routes between you", d.trade_routes_between_you);
+  if (d.pacts_with_you) { r.append(el("div", "li", "Pacts:")); list(r, d.pacts_with_you); }
+  if (d.deals_with_you) { r.append(el("div", "li", "Ongoing deals:")); list(r, d.deals_with_you); }
+  if (d.agenda) kv(r, "Agenda", d.agenda);
+  // their empire
+  const e = sec("Their empire");
+  kv(e, "Score", l.score); kv(e, "Military", l.military);
+  kv(e, "With city-state backing", d.military_with_city_states !== l.military ? d.military_with_city_states : null);
+  kv(e, "Science / culture per turn", d.science_per_turn != null ? `${d.science_per_turn} / ${d.culture_per_turn}` : null);
+  kv(e, "Gold / faith saved", d.gold != null ? `${d.gold} / ${d.faith ?? "?"}` : null);
+  kv(e, "Government", d.government); kv(e, "Era", d.era ? d.era + (d.age && d.age !== "normal" ? ` (${d.age} age)` : "") : null);
+  kv(e, "Religion", d.religion); kv(e, "Nuclear weapons", fmt(d.nuclear_weapons));
+  kv(e, "Techs / civics", d.techs_known != null ? `${d.techs_known} / ${d.civics_known}` : null);
+  kv(e, "Districts", d.districts); kv(e, "Continents", fmt(d.their_continents));
+  kv(e, "City-states backing them", d.city_states_backing_them);
+  if (d.wonders) kv(e, "Wonders", d.wonders);
+  // military and cities
+  const m = sec("Army and cities");
+  kv(m, "Army", d.their_army);
+  kv(m, "Their troops near you", d.their_troops_near_your_cities != null ? `${d.their_troops_near_your_cities}${d.which_of_their_units ? " (" + d.which_of_their_units + ")" : ""}` : null);
+  if (d.cities_close_to_yours) list(m, d.cities_close_to_yours);
+  if (d.cities_they_conquered) { m.append(el("div", "li", "Conquered:")); list(m, d.cities_they_conquered); }
+  if (d.their_cities) { m.append(el("div", "li", "Cities:")); list(m, d.their_cities); }
+  // friends and enemies
+  const rel = d.relationships || {};
+  const fr = sec("Their friends and enemies");
+  kv(fr, "Allies", rel.allies); kv(fr, "Friends", rel.friends); kv(fr, "At war with", rel.at_war_with); kv(fr, "Denounced", rel.denounced);
+  if (!Object.keys(rel).length) fr.append(el("div", "li", "No alliances, friendships or wars with anyone you know."));
+  return wrap;
+}
+
+// Each civ keeps one color in every chart: its avatar's color in the sidebar ("you" in white).
+function civColors(data) {
+  const ids = { ...Object.fromEntries(S.state.leaders.map((l) => [l.leader, l.id])), ...(S.state.trust_ids || {}) };
+  const names = [...new Set(Object.entries(data).flatMap(([who, lines]) => [who, ...Object.keys(lines)]))];
+  const out = {}, used = new Set();
+  for (const n of names) {
+    if (n === "you" || ids[n] === S.state.me.id) out[n] = "#ece4d2";
+    else if (ids[n] != null) { out[n] = COLORS[ids[n] % COLORS.length]; used.add(out[n]); }
+  }
+  // No id (an older server): a color nobody else has, the same in every chart.
+  const free = COLORS.filter((c) => !used.has(c));
+  names.filter((n) => !(n in out)).sort().forEach((n, i) => { out[n] = free.length ? free[i % free.length] : "#8b97a9"; });
+  return { color: (n) => out[n] || "#8b97a9", order: (n) => ids[n] ?? 99 };
+}
+function trustCharts() {
+  const wrap = el("div", "diplo");
+  const data = S.state.trust || {};
+  if (!Object.keys(data).length) { wrap.append(el("div", "dsec", "No trust changes recorded yet.")); return wrap; }
+  const civ = civColors(data);
+  const NS = "http://www.w3.org/2000/svg", W = 300, H = 120, P = 22;
+  const svgEl = (tag, attrs) => { const x = document.createElementNS(NS, tag); for (const k in attrs) x.setAttribute(k, attrs[k]); return x; };
+  for (const [leader, lines] of Object.entries(data)) {
+    const box = el("div", "dsec"), h = el("h5", null, `${leader} trusts…`);
+    h.style.color = civ.color(leader); box.append(h);
+    const all = Object.values(lines).flat();
+    const t0 = Math.min(...all.map((p) => p[0])), t1 = Math.max(...all.map((p) => p[0]), t0 + 1);
+    const x = (t) => P + (t - t0) / (t1 - t0) * (W - P - 6), y = (v) => 6 + (100 - v) / 200 * (H - 18);
+    const svg = svgEl("svg", { viewBox: `0 0 ${W} ${H}`, width: "100%", role: "img" });
+    for (const v of [100, 0, -100]) {
+      svg.append(svgEl("line", { x1: P, x2: W - 6, y1: y(v), y2: y(v), stroke: "#26364d", "stroke-dasharray": v ? "2 3" : "" }));
+      const lab = svgEl("text", { x: 2, y: y(v) + 3, fill: "#8b97a9", "font-size": 8 }); lab.textContent = v; svg.append(lab);
+    }
+    const legend = el("div", "li");
+    Object.entries(lines).sort(([a], [b]) => civ.order(a) - civ.order(b)).forEach(([who, pts]) => {
+      const color = civ.color(who);
+      svg.append(svgEl("polyline", { points: pts.map((p) => `${x(p[0])},${y(p[1])}`).join(" "), fill: "none", stroke: color, "stroke-width": 1.8 }));
+      const sw = el("span", null, `■ ${who} (${pts[pts.length - 1][1]})  `); sw.style.color = color; legend.append(sw);
+    });
+    const span = el("div", "li", `turns ${t0}–${t1}`); span.style.color = "var(--muted)"; span.style.fontSize = "11px";
+    box.append(svg, legend, span); wrap.append(box);
+  }
+  return wrap;
+}
+
+function bubble(e) {
+  const mine = e.sender === S.state.me.id;
+  const b = el("div", "b" + (mine ? " mine" : ""));
+  let from = mine ? "You" : e.sender_name;
+  if (S.chan === "spy" && e.to_name) from = `${e.sender_name} → ${e.to_name}`;
+  if (typeof S.chan === "number" && !mine) from = null;
+  if (from) b.append(el("div", "from", from));
+  if (e.reply_to) b.append(el("div", "q", `${e.reply_to.name}: ${e.reply_to.text}`));
+  if (e.rumor_about) b.append(el("div", "rumor", `🗣️ rumor about ${e.rumor_about}`));
+  b.append(el("div", "t", e.text));
+  if (S.chan !== "spy" && S.chan !== "minds") {
+    const r = el("button", "rbtn", "↩"); r.title = "Reply to this"; r.type = "button";
+    r.onclick = () => setReply(e);
+    b.append(r);
+  }
+  return b;
+}
+
+function thoughtCard(e) {
+  const c = el("div", "card thought");
+  c.append(el("div", "from", `${e.sender_name} · ${e.model} · ${e.why}`));
+  c.append(el("div", "t", e.text));
+  const did = [];
+  if (e.said) did.push(`${e.said} message${e.said > 1 ? "s" : ""}`);
+  if (e.acted && e.acted.length) did.push(e.acted.join(", ").replace(/_/g, " "));
+  if (e.plan) c.append(el("div", "plan", "Plan: " + e.plan));
+  if (did.length) c.append(el("div", "plan", "Did: " + did.join(" · ")));
+  return c;
+}
+
+function newsCard(e) {
+  const c = el("div", "card news");
+  c.append(el("div", "t", "📰 " + e.text.replace(/: \d+ items?$/, "")));
+  for (const sec of e.sections || []) {
+    c.append(el("div", "nh", sec.title));
+    for (const it of sec.items) c.append(el("div", "ni", "• " + it));
+  }
+  return c;
+}
+
+function pactCard(e) {
+  const c = el("div", "card pact");
+  c.append(el("div", "t", "📜 " + e.text));
+  const p = S.state.pacts.find((x) => x.id === "pact-" + e.pact_id);
+  if (p && p.status === "offered" && (p.needs_you ?? !p.from_me)) {
+    const row = el("div", "row");
+    const y = el("button", "yes", "Accept"); y.onclick = () => api("/api/pact_answer", { id: p.id, accept: true });
+    const n = el("button", "no", "Decline"); n.onclick = () => api("/api/pact_answer", { id: p.id, accept: false });
+    row.append(y, n); c.append(row);
+    if (p.expires_in != null) c.append(el("div", "exp", p.expires_in <= 1 ? "expires at the end of this turn" : `expires in ${p.expires_in} turns`));
+  } else if (p && p.status === "offered" && p.group) c.append(el("div", "done", `Waiting for ${p.waiting_for.join(", ")}`));
+  else if (p && p.status === "active") c.append(el("div", "done", "In force"));
+  return c;
+}
+
+function proposalCard(e) {
+  const c = el("div", "card");
+  c.append(el("div", "t", "📜 " + e.text));
+  const open = S.state.proposals.some((p) => p.id === e.proposal_id);
+  if (open) {
+    const row = el("div", "row");
+    const y = el("button", "yes", "Accept"); y.onclick = () => api("/api/respond", { id: e.proposal_id, accept: true });
+    const n = el("button", "no", "Decline"); n.onclick = () => api("/api/respond", { id: e.proposal_id, accept: false });
+    row.append(y, n); c.append(row);
+    const p = S.state.proposals.find((x) => x.id === e.proposal_id);
+    if (p && p.kind === "propose_deal") row.append(counterBtn(p));
+    if (expiry(p)) c.append(el("div", "exp", expiry(p)));
+  } else c.append(el("div", "done", "Answered or expired"));
+  return c;
+}
+
+// ---- your deal screen ----------------------------------------------------------
+const pretty = (k) => k.replace(/^RESOURCE_/, "").toLowerCase().replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+
+function closeDeal() { S.deal = null; S.pactFor = null; const b = $("dealbox"); b.hidden = true; b.innerHTML = ""; if (S.state) renderHead(); }
+
+async function openDeal(l, counter) {
+  S.deal = l.id; S.pactFor = null; renderHead();
+  const war = l.stance_with_you === "war";
+  const title = counter ? `Counter-offer to ${l.leader}` : war ? `Peace terms with ${l.leader}` : `Deal with ${l.leader}`;
+  const box = $("dealbox"); box.hidden = false; box.innerHTML = "";
+  box.append(el("div", "dtitle", title), el("div", "dnone", "Checking what you two can trade…"));
+  let opts;
+  try { opts = await (await fetch(`/api/trade?with=${l.id}`)).json(); } catch (e) { opts = { ok: false, error: "Can't reach the server." }; }
+  if (S.deal !== l.id) return;
+  box.innerHTML = "";
+  box.append(el("div", "dtitle", title));
+  if (!opts.ok) { box.append(el("div", "derr", opts.error)); return; }
+  if (war) box.append(el("div", "dnone", "If they accept, peace is signed and these terms are carried out together. "
+    + "If the terms can't go through, the war goes on. (For peace with no terms, use Offer peace.)"));
+  if (counter) box.append(el("div", "dnone", `Their offer: ${counter.label}. Change it below and send it back; `
+    + "their offer is declined once yours goes out."));
+  const give = sideForm("You give", opts.you_can_give, counter && counter.you_give),
+        ask = sideForm(`${l.leader} gives`, opts.they_can_give, counter && counter.you_get);
+  const lost = [...give.missing, ...ask.missing];
+  if (lost.length) box.append(el("div", "derr", `Not tradeable right now, so left out: ${lost.join(", ")}.`));
+  const cols = el("div", "dcols"); cols.append(give.node, ask.node); box.append(cols);
+  const note = el("textarea", "dnote");
+  note.placeholder = war ? `Add a message to ${l.leader} (optional): why they should take these terms…`
+    : `Add a message to ${l.leader} (optional): why this is a good deal…`;
+  box.append(note);
+  const row = el("div", "drow");
+  const go = el("button", "yes", ""), cancel = el("button", "no", "Cancel"), err = el("span", "derr");
+  const relabel = () => { go.textContent = counter ? "Send counter-offer" : war ? "Offer peace on these terms"
+    : Object.keys(ask.read()).length ? "Offer deal" : "Send as a gift"; };
+  relabel();
+  box.addEventListener("input", relabel); box.addEventListener("change", relabel);
+  cancel.onclick = closeDeal;
+  go.onclick = async () => {
+    const g = give.read(), a = ask.read();
+    if (!Object.keys(g).length && !Object.keys(a).length) { err.textContent = "Pick something to give or ask for."; return; }
+    go.disabled = true; err.textContent = "";
+    const r = await api("/api/deal", { to: l.id, give: g, ask: a, note: note.value, ...(counter ? { counter_to: counter.id } : {}) });
+    go.disabled = false;
+    if (r.ok) closeDeal(); else err.textContent = r.error || "That deal didn't go through.";
+  };
+  row.append(go, cancel, err); box.append(row);
+}
+
+async function openPact(l) {
+  S.deal = null; S.pactFor = l.id; renderHead();
+  const box = $("dealbox"); box.hidden = false; box.innerHTML = "";
+  box.append(el("div", "dtitle", `Pact with ${l.leader}`));
+  box.append(el("div", "dnone", "An agreement in words: you're their overlord and they follow your lead, a border line, "
+    + "a joint war, paying them to fight someone for you... Civ can't enforce it; they'll keep it or break it."));
+  const title = el("input", "dfield"); title.placeholder = "Short name, e.g. Mali under England's protection";
+  const terms = el("textarea", "dfield"); terms.placeholder = "Terms: what each side agrees to. E.g. Mali joins England's wars, "
+    + "stays off Africa and votes with England in Congress; England protects Mali and sends it 20 gold a turn.";
+  const turns = el("input", "dfield"); turns.type = "number"; turns.min = 1; turns.placeholder = "How many turns (leave empty for open-ended)";
+  box.append(title, terms, turns);
+  const pay = el("details", "dpay"); pay.append(el("summary", null, "Add a payment that changes hands when they accept (optional)"));
+  box.append(pay);
+  let give = null, ask = null, loading = false;
+  pay.addEventListener("toggle", async () => {
+    if (!pay.open || give || loading) return;
+    loading = true;
+    const wait = el("div", "dnone", "Checking what you two can trade…"); pay.append(wait);
+    let opts;
+    try { opts = await (await fetch(`/api/trade?with=${l.id}`)).json(); } catch (e) { opts = { ok: false, error: "Can't reach the server." }; }
+    wait.remove();
+    if (!opts.ok || opts.at_war) { pay.append(el("div", "derr", opts.at_war ? "No payments while you're at war: use Peace terms." : opts.error)); return; }
+    give = sideForm("You give", opts.you_can_give); ask = sideForm(`${l.leader} gives`, opts.they_can_give);
+    const cols = el("div", "dcols"); cols.append(give.node, ask.node); pay.append(cols);
+  });
+  const note = el("textarea", "dnote"); note.placeholder = `Add a message to ${l.leader} (optional): why this is good for them…`;
+  box.append(note);
+  const row = el("div", "drow");
+  const go = el("button", "yes", "Offer pact"), cancel = el("button", "no", "Cancel"), err = el("span", "derr");
+  cancel.onclick = closeDeal;
+  go.onclick = async () => {
+    if (!terms.value.trim()) { err.textContent = "Write the terms: what each side agrees to."; return; }
+    go.disabled = true; err.textContent = "";
+    const r = await api("/api/pact", { to: l.id, title: title.value, terms: terms.value, turns: turns.value || null,
+                                       give: give ? give.read() : {}, ask: ask ? ask.read() : {}, note: note.value });
+    go.disabled = false;
+    if (r.ok) closeDeal(); else err.textContent = r.error || "That pact didn't go through.";
+  };
+  row.append(go, cancel, err); box.append(row);
+  title.focus();
+}
+
+function sideForm(title, can, pre) {
+  pre = pre || {};
+  const node = el("div", "dcol"), readers = [], used = new Set();
+  node.append(el("h4", null, title));
+  const fill = (inp, n, max) => { if (n) inp.value = Math.min(+n, max); };
+  const number = (label, k, max, suffix) => {
+    const it = el("div", "ditem");
+    const lab = el("label", null, label);
+    const inp = el("input"); inp.type = "number"; inp.min = 0; inp.max = max; inp.placeholder = "0";
+    fill(inp, pre[k], max); used.add(k);
+    it.append(lab, inp, el("span", "max", `max ${max}${suffix || ""}`)); node.append(it);
+    readers.push((out) => { const n = Math.min(+inp.value || 0, max); if (n > 0) out[k] = n; });
+  };
+  const check = (label, onRead, on) => {
+    const it = el("label", "ditem");
+    const cb = el("input"); cb.type = "checkbox"; cb.checked = !!on;
+    it.append(cb, el("span", null, label)); node.append(it);
+    readers.push((out) => { if (cb.checked) onRead(out); });
+  };
+  if (can.gold) number("Gold", "gold", can.gold);
+  if (can.gold_per_turn) number("Gold per turn", "gold_per_turn", can.gold_per_turn, " (30 turns)");
+  if (can.favor) number("Diplomatic favor", "favor", can.favor);
+  const preRes = pre.resources || {};
+  for (const [res, max] of Object.entries(can.resources || {})) {
+    used.add(res);
+    if (max <= 1) check(`${pretty(res)} (30 turns)`, (out) => { (out.resources = out.resources || {})[res] = 1; }, preRes[res]);
+    else {
+      const it = el("div", "ditem");
+      const inp = el("input"); inp.type = "number"; inp.min = 0; inp.max = max; inp.placeholder = "0";
+      fill(inp, preRes[res], max);
+      it.append(el("label", null, pretty(res)), inp, el("span", "max", `max ${max}`)); node.append(it);
+      readers.push((out) => { const n = Math.min(+inp.value || 0, max); if (n > 0) (out.resources = out.resources || {})[res] = n; });
+    }
+  }
+  if (can.open_borders) { check("Open borders", (out) => { out.open_borders = true; }, pre.open_borders); used.add("open_borders"); }
+  for (const city of can.cities || []) {
+    check(`The city of ${city}`, (out) => { (out.cities = out.cities || []).push(city); }, (pre.cities || []).includes(city));
+    used.add("city:" + city);
+  }
+  if (!readers.length) node.append(el("div", "dnone", "Nothing to trade right now."));
+  // What their offer had that can't be traded now (a resource that ran out, say), so it isn't silently dropped.
+  const missing = [];
+  for (const k of ["gold", "gold_per_turn", "favor", "open_borders"])
+    if (pre[k] && !used.has(k)) missing.push(k === "open_borders" ? "open borders" : `${pre[k]} ${k.replace(/_/g, " ").replace("favor", "diplomatic favor")}`);
+  for (const r of Object.keys(preRes)) if (!used.has(r)) missing.push(pretty(r));
+  for (const c of pre.cities || []) if (!used.has("city:" + c)) missing.push(c);
+  return { node, missing, read: () => { const out = {}; for (const r of readers) r(out); return out; } };
+}
+
+const ICON = { membership: "👥 ", war: "⚔️ ", treaty: "📜 ", event: "🌍 ", info: "📚 ", error: "⚠️ " };
+function renderMsgs(toBottom) {
+  const box = $("msgs");
+  if (S.chan === "new") {
+    if (!box.querySelector(".newgroup")) { box.innerHTML = ""; box.append(newGroupForm()); }
+    return;
+  }
+  const quietOff = S.chan === "minds" && !S.showQuiet;
+  const list = S.entries.filter((e) => !hidden(e) && (key(e.channel) === key(S.chan) || (e.kind === "turn" && S.chan === "world"))
+    && !(quietOff && ((e.kind === "thought" && e.quiet) || (e.kind === "orders" && e.sender == null))));
+  const g = groupById(S.chan);
+  const here = typeof S.chan === "number" ? [leaderById(S.chan)].filter(Boolean)
+    : g ? S.state.leaders.filter((x) => g.members.includes(x.id)) : [];
+  const writer = here.find((x) => S.state.status.startsWith(x.leader));
+  // Redraw only when this chat changed, and keep your place unless you're at the bottom (or just wrote).
+  const last = list.length ? list[list.length - 1] : null;
+  const sig = [key(S.chan), list.length, last ? last.id : 0, writer ? writer.id : "",
+               S.state.proposals.map((p) => p.id + ":" + p.expires_in).join(","), S.state.leaders.length, S.state.live,
+               S.state.pacts.map((p) => p.id + p.status + p.expires_in).join(","),
+               S.showQuiet].join("|");
+  if (!toBottom && sig === S.msgSig) return;
+  const sameChat = S.msgSig && S.msgSig.split("|")[0] === key(S.chan);
+  const grew = sameChat && last && last.id > (S.msgLast || 0);
+  S.msgSig = sig; S.msgLast = last ? last.id : 0;
+  const nearBottom = box.scrollHeight - box.scrollTop - box.clientHeight < 80;
+  const top = box.scrollTop;
+  box.innerHTML = "";
+  if (!list.length) {
+    const msg = S.chan === "world" ? (S.state.live && !S.state.leaders.length
+        ? "You haven't met any leaders yet. Explore in Civ 6; leaders appear here once you meet them."
+        : "The world is quiet. Say something to every leader at once, or end your turn.")
+      : S.chan === "spy" ? "Nothing overheard yet."
+      : S.chan === "minds" ? "No thoughts yet. They show up here as each leader thinks."
+      : "No words exchanged yet. They're waiting to hear from you.";
+    box.append(el("div", "empty", msg));
+  }
+  let turn = null;
+  for (const e of list) {
+    if (S.chan !== "world" && e.turn !== turn) box.append(el("div", "divider", `Turn ${e.turn}`));   // World has its own
+    turn = e.turn;
+    if (e.kind === "thought") box.append(thoughtCard(e));
+    else if (e.kind === "message") box.append(bubble(e));
+    else if (e.kind === "proposal" && S.chan !== "spy") box.append(proposalCard(e));
+    else if (e.kind === "pact" && S.chan !== "spy") box.append(pactCard(e));
+    else if (e.kind === "news") box.append(newsCard(e));
+    else if (e.kind === "turn") box.append(el("div", "divider", e.text));
+    else box.append(el("div", "line " + e.kind, (ICON[e.kind] || "") + e.text));
+  }
+  if (writer) box.append(el("div", "typing", `${writer.leader} is composing a reply…`));
+  const mine = grew && last.sender === S.state.me.id;
+  if (toBottom || !sameChat || mine || nearBottom) { S.newBelow = false; box.scrollTop = box.scrollHeight; }
+  else {
+    if (grew) S.newBelow = true;
+    if (S.newBelow) {
+      const pill = el("button", "newpill", "↓ New messages"); pill.type = "button";
+      pill.onclick = () => { S.newBelow = false; pill.remove(); box.scrollTop = box.scrollHeight; };
+      box.append(pill);
+    }
+    box.scrollTop = top;   // you're reading further up: stay there
+  }
+}
+$("msgs").addEventListener("scroll", () => {
+  const box = $("msgs");
+  if (S.newBelow && box.scrollHeight - box.scrollTop - box.clientHeight < 80) {
+    S.newBelow = false;
+    const pill = box.querySelector(".newpill"); if (pill) pill.remove();
+  }
+});
+
+$("composer").onsubmit = (ev) => {
+  ev.preventDefault();
+  const text = $("input").value.trim();
+  if (!text || S.chan === "spy") return;
+  $("input").value = "";
+  const reply_to = S.reply ? S.reply.id : undefined;
+  setReply(null);
+  api("/api/say", { to: S.chan, text, reply_to });
+};
+$("replyX").onclick = () => setReply(null);
+$("input").addEventListener("keydown", (ev) => { if (ev.key === "Escape" && S.reply) setReply(null); });
+$("offersBtn").onclick = () => togglePop("offers");
+$("prefsBtn").onclick = () => togglePop("prefs");
+$("usageBtn").onclick = () => togglePop("usage");
+setupPrefs();
+$("input").addEventListener("keydown", (ev) => { if (ev.key === "Enter" && !ev.shiftKey) { ev.preventDefault(); $("composer").requestSubmit(); } });
+$("endBtn").onclick = () => api("/api/end_turn");
+$("spyBtn").onclick = () => {
+  if (S.state.spy && (S.chan === "spy" || S.chan === "minds")) S.chan = "world";
+  api("/api/spy", { on: !S.state.spy });
+};
+$("saveBtn").onclick = () => api("/api/save");
+setInterval(poll, 1000);
+poll();
+</script>
+</body>
+</html>

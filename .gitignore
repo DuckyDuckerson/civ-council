@@ -1,0 +1,9 @@
+memories/
+__pycache__/
+.pytest_cache/
+.DS_Store
+bridge/probe*_report*.txt
+bridge/probe_report*.txt
+bridge/*_state.json
+logs/
+CLAUDE.local.md
