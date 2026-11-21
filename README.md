@@ -156,6 +156,10 @@ To use less: keep Haiku for turns, play with fewer civs, or set `--strategy-mode
 - **"claude: not found" or "not logged in"**: run `claude` in Terminal and log in. If it's installed somewhere
   unusual, pass `--claude-bin /path/to/claude`.
 - **Leaders stop answering for a while**: you may have hit your Claude plan's usage limit. It resets on its own.
+- **Double-clicking `play.command` says "no such file or directory" and the path is missing its first `/`**:
+  something in your shell's startup ate the first keystroke Terminal typed. Usually it's oh-my-zsh asking
+  "Would you like to update? [Y/n]". Answer it once in a new Terminal window, or add
+  `zstyle ':omz:update' mode reminder` to `~/.zshrc` (before oh-my-zsh is loaded) so it stops asking.
 - **Multiplayer**: not supported. Scripted changes would desync a multiplayer game.
 
 ## How it works
